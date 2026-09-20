@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Panel, Group } from "react-resizable-panels";
+import { Panel, PanelGroup } from "react-resizable-panels";
 
 import { usePlaygroundStore } from "@/store/playground-store";
 import { Header } from "./Header";
@@ -9,7 +9,7 @@ import { EditorPanel } from "./EditorPanel";
 import { PreviewPanel } from "./PreviewPanel";
 import { ConsolePanel } from "./ConsolePanel";
 import { TheoryPanel } from "./TheoryPanel";
-import { ResizeHandle } from "./ResizeHandle";
+// import { ResizeHandle } from "./ResizeHandle";
 
 export function Playground() {
   const mainView = usePlaygroundStore((s) => s.mainView);
@@ -31,23 +31,23 @@ export function Playground() {
         {mainView === "theory" ? (
           <TheoryPanel />
         ) : (
-          <Group  >
+          <PanelGroup direction="horizontal" autoSaveId="playground-h-layout">
             <Panel defaultSize={50} minSize={20}>
               <EditorPanel />
             </Panel>
-            <ResizeHandle direction="horizontal" />
+            {/* <ResizeHandle direction="horizontal" /> */}
             <Panel defaultSize={50} minSize={20}>
-              <Group>
+              <PanelGroup direction="vertical" autoSaveId="playground-v-layout">
                 <Panel defaultSize={70} minSize={15}>
                   <PreviewPanel />
                 </Panel>
-                <ResizeHandle direction="vertical" />
+                {/* <ResizeHandle direction="vertical" /> */}
                 <Panel defaultSize={30} minSize={10}>
                   <ConsolePanel />
                 </Panel>
-              </Group>
+              </PanelGroup>
             </Panel>
-          </Group>
+          </PanelGroup>
         )}
       </div>
     </div>
