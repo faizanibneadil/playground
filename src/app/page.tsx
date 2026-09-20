@@ -1,6 +1,5 @@
+import { Playground } from "@/components/playground/Playground";
 
-export default function Home() {
-  return (
-   <main>lending page</main>
-  );
+export default function Page() {
+  return <Playground />;
 }
