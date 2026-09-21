@@ -1,50 +1,31 @@
 "use client";
 
 import { ChevronDown, Play, RotateCcw } from "lucide-react";
-
-import { usePlayground } from "@/context/playground-context";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger, TabsIndicator } from "@/components/ui/tabs";
+import { usePlayground } from "@/context/playground-context";
 import { ProjectNameField } from "./ProjectNameField";
 import { ThemeToggle } from "./ThemeToggle";
-import { cn } from "@/lib/utils";
+import { ViewTabs } from "./ViewTabs";
 
-interface HeaderProps {
-  isMobile: boolean;
-  expanded: boolean;
-  onToggleExpand: () => void;
-}
-
-function ViewTabs() {
-  const { state, actions } = usePlayground();
-  return (
-    <Tabs
-      value={state.mainView}
-      onValueChange={(v) => actions.setMainView(v as "theory" | "practical")}
-    >
-      <TabsList>
-        <TabsIndicator />
-        <TabsTrigger value="theory">Theory</TabsTrigger>
-        <TabsTrigger value="practical">Practical</TabsTrigger>
-      </TabsList>
-    </Tabs>
-  );
-}
-
-function RunResetControls() {
+function RunResetControls({ fullWidth = false }: { fullWidth?: boolean }) {
   const { actions } = usePlayground();
   return (
     <>
-      <Button size="sm" onClick={() => actions.run()} className="gap-1.5">
+      <Button
+        size="sm"
+        onClick={() => actions.run()}
+        className={fullWidth ? "flex-1 gap-1.5" : "gap-1.5"}
+      >
         <Play className="size-3 fill-current" />
         Run
       </Button>
       <Button
         size="sm"
         variant="secondary"
-        className="gap-1.5"
+        className={fullWidth ? "flex-1 gap-1.5" : "gap-1.5"}
         onClick={() => {
           if (window.confirm("Reset HTML, CSS and JS back to the starter template?")) {
             actions.reset();
@@ -65,10 +46,10 @@ function AutoSaveToggle() {
       <Checkbox
         id="autosave"
         checked={state.autoSave}
-        onCheckedChange={(checked) => actions.setAutoSave(checked === true)}
+        onCheckedChange={(checked: boolean) => actions.setAutoSave(checked === true)}
       />
       Auto-save
-      <span className="hidden text-[11px] sm:inline">
+      <span className="text-[11px]">
         {state.autoSave
           ? state.saveStatus === "saved"
             ? "(saved)"
@@ -79,40 +60,45 @@ function AutoSaveToggle() {
   );
 }
 
-export function Header({ isMobile, expanded, onToggleExpand }: HeaderProps) {
+function MobileOptionsDrawer() {
+  return (
+    <Drawer>
+      <DrawerTrigger className="-ml-1.5 flex items-center gap-1.5 rounded-md py-1.5 pr-2 pl-1.5 hover:bg-accent">
+        <h1 className="text-sm font-semibold tracking-tight text-foreground">
+          Playground
+        </h1>
+        <ChevronDown className="size-3.5 text-muted-foreground" />
+      </DrawerTrigger>
+      <DrawerContent title="Playground options" className="h-auto max-h-[80dvh]">
+        <div className="flex flex-col gap-4 p-4">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-medium text-muted-foreground">
+              Project name
+            </span>
+            <ProjectNameField />
+          </div>
+          <AutoSaveToggle />
+          <div className="flex gap-2">
+            <RunResetControls fullWidth />
+          </div>
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+export function Header({ isMobile }: { isMobile: boolean }) {
   if (isMobile) {
     return (
-      <div className="flex h-full flex-col overflow-hidden bg-panel">
-        <button
-          type="button"
-          onClick={onToggleExpand}
-          className="flex h-11 shrink-0 items-center justify-between px-3"
-        >
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm font-semibold tracking-tight text-foreground">
-              Playground
-            </h1>
-          </div>
-          <ChevronDown
-            className={cn(
-              "size-4 text-muted-foreground transition-transform",
-              expanded && "rotate-180"
-            )}
-          />
-        </button>
-
-        {expanded && (
-          <div className="flex flex-1 flex-col gap-3 overflow-y-auto border-t border-border px-3 py-3">
-            <ProjectNameField />
-            <ViewTabs />
-            <div className="flex flex-wrap items-center gap-2">
-              <AutoSaveToggle />
-              <RunResetControls />
-              <ThemeToggle />
-            </div>
-          </div>
-        )}
-      </div>
+      <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-panel px-2">
+        <div className="flex min-w-0 flex-1 items-center">
+          <MobileOptionsDrawer />
+        </div>
+        <ViewTabs />
+        <div className="flex flex-1 items-center justify-end">
+          <ThemeToggle />
+        </div>
+      </header>
     );
   }
 

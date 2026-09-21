@@ -1,8 +1,8 @@
 "use client";
 
-import * as React from "react";
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 import { CheckIcon } from "lucide-react";
+import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ function Checkbox({
         "focus-visible:ring-2 focus-visible:ring-ring/50",
         "data-[checked]:bg-primary data-[checked]:text-primary-foreground data-[checked]:border-primary",
         "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50",
-        className
+        className,
       )}
       {...props}
     >

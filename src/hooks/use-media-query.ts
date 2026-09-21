@@ -18,7 +18,7 @@ export function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     (callback) => subscribe(query, callback),
     () => window.matchMedia(query).matches,
-    () => false
+    () => false,
   );
 }
 

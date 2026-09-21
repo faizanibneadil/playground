@@ -2,11 +2,11 @@
 
 import {
   createContext,
+  type ReactNode,
   useContext,
   useEffect,
   useReducer,
   useRef,
-  type ReactNode,
 } from "react";
 
 import { DEFAULT_FILES } from "@/lib/default-code";
@@ -77,10 +77,7 @@ const initialState: PlaygroundState = {
 // A pure reducer: no localStorage access, no timers, no side effects here.
 // Persistence and debouncing happen in the Provider's effects below, which
 // keeps this function safe for the React Compiler to reason about.
-function playgroundReducer(
-  state: PlaygroundState,
-  action: Action
-): PlaygroundState {
+function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundState {
   switch (action.type) {
     case "SET_PROJECT_NAME": {
       const clean = sanitizeProjectNameInput(action.name);
@@ -158,7 +155,7 @@ function persist(payload: PersistedState) {
   try {
     window.localStorage.setItem(
       STORAGE_PREFIX + payload.projectName,
-      JSON.stringify(payload)
+      JSON.stringify(payload),
     );
     return true;
   } catch {
@@ -220,8 +217,7 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
 
   const actions: PlaygroundActions = {
     setProjectName: (name) => dispatch({ type: "SET_PROJECT_NAME", name }),
-    setFileContent: (file, content) =>
-      dispatch({ type: "SET_FILE", file, content }),
+    setFileContent: (file, content) => dispatch({ type: "SET_FILE", file, content }),
     setTheory: (content) => dispatch({ type: "SET_THEORY", content }),
     setActiveFile: (file) => dispatch({ type: "SET_ACTIVE_FILE", file }),
     setMainView: (view) => dispatch({ type: "SET_MAIN_VIEW", view }),
@@ -232,11 +228,7 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     clearLogs: () => dispatch({ type: "CLEAR_LOGS" }),
   };
 
-  return (
-    <PlaygroundContext value={{ state, actions }}>
-      {children}
-    </PlaygroundContext>
-  );
+  return <PlaygroundContext value={{ state, actions }}>{children}</PlaygroundContext>;
 }
 
 export function usePlayground() {

@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { Trash2 } from "lucide-react";
-
-import { usePlayground } from "@/context/playground-context";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { usePlayground } from "@/context/playground-context";
 import { cn } from "@/lib/utils";
 
 const LEVEL_STYLES: Record<string, string> = {
@@ -26,6 +25,7 @@ export function ConsolePanel() {
   const { logs } = state;
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally re-runs on every new log line, to scroll to the newest entry.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -61,7 +61,7 @@ export function ConsolePanel() {
             key={entry.id}
             className={cn(
               "flex items-start gap-2 border-b border-border/50 py-1 last:border-0",
-              LEVEL_STYLES[entry.level] ?? "text-foreground"
+              LEVEL_STYLES[entry.level] ?? "text-foreground",
             )}
           >
             <span className="mt-0.5 select-none text-muted-foreground">

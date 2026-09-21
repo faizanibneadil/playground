@@ -1,8 +1,8 @@
-import * as prettier from "prettier/standalone";
-import prettierHtml from "prettier/plugins/html";
-import prettierPostcss from "prettier/plugins/postcss";
 import prettierBabel from "prettier/plugins/babel";
 import prettierEstree from "prettier/plugins/estree";
+import prettierHtml from "prettier/plugins/html";
+import prettierPostcss from "prettier/plugins/postcss";
+import * as prettier from "prettier/standalone";
 
 export type EditorLanguage = "html" | "css" | "javascript";
 
@@ -18,7 +18,7 @@ const PARSER_BY_LANGUAGE: Record<EditorLanguage, string> = {
  */
 export async function formatCode(
   code: string,
-  language: EditorLanguage
+  language: EditorLanguage,
 ): Promise<string> {
   return prettier.format(code, {
     parser: PARSER_BY_LANGUAGE[language],

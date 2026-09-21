@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./typeset.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -121,6 +122,22 @@
     Roboto, Helvetica, Arial, sans-serif;
   /* Same stack VS Code ships as its default editor font on macOS. */
   --font-mono: Menlo, Monaco, "Courier New", monospace;
+  /* Fonts consumed by the shadcn/typeset preset below — not used by the
+     rest of the app chrome. */
+  --font-oxanium: "Oxanium", "Segoe UI", ui-sans-serif, sans-serif;
+  --font-instrument-sans: "Instrument Sans", "Segoe UI", ui-sans-serif,
+    sans-serif;
+  --font-jetbrains-mono: "JetBrains Mono", Menlo, Monaco, monospace;
+}
+
+/* shadcn/typeset preset for the Theory tab's rendered notes. */
+.typeset-docs {
+  --typeset-font-body: var(--font-oxanium);
+  --typeset-font-heading: var(--font-instrument-sans);
+  --typeset-font-mono: var(--font-jetbrains-mono);
+  --typeset-size: 16px;
+  --typeset-leading: 1.6;
+  --typeset-flow: 1em;
 }
 
 * {
@@ -178,92 +195,13 @@ body {
   background-color: var(--color-primary);
 }
 
-/* --- Theory tab: Tiptap live markdown editor --- */
-.theory-editor {
-  height: 100%;
-  overflow-y: auto;
-  padding: 2.5rem clamp(1.25rem, 6vw, 6rem);
-}
-.theory-editor .tiptap {
-  outline: none;
-  min-height: 100%;
-  color: var(--color-foreground);
-  font-size: 0.95rem;
-  line-height: 1.75;
-  max-width: 46rem;
-  margin: 0 auto;
-}
-.theory-editor .tiptap > * + * {
-  margin-top: 0.85em;
-}
-.theory-editor .tiptap h1 {
-  font-size: 1.9em;
-  font-weight: 700;
-  line-height: 1.25;
-  margin-top: 1.2em;
-}
-.theory-editor .tiptap h2 {
-  font-size: 1.5em;
-  font-weight: 700;
-  line-height: 1.3;
-  margin-top: 1.1em;
-}
-.theory-editor .tiptap h3 {
-  font-size: 1.2em;
-  font-weight: 600;
-  margin-top: 1em;
-}
-.theory-editor .tiptap p.is-editor-empty:first-child::before {
+/* Tiptap's Placeholder extension needs this to render its empty-state
+ * text — this is a functional hook for the extension, not typography, so
+ * it stays outside shadcn/typeset (which only styles rendered content). */
+.tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
   height: 0;
   color: var(--color-muted-foreground);
   pointer-events: none;
-}
-.theory-editor .tiptap ul,
-.theory-editor .tiptap ol {
-  padding-left: 1.4em;
-}
-.theory-editor .tiptap ul {
-  list-style: disc;
-}
-.theory-editor .tiptap ol {
-  list-style: decimal;
-}
-.theory-editor .tiptap li + li {
-  margin-top: 0.25em;
-}
-.theory-editor .tiptap blockquote {
-  border-left: 3px solid var(--color-border);
-  margin-left: 0;
-  padding-left: 1em;
-  color: var(--color-muted-foreground);
-}
-.theory-editor .tiptap code {
-  background: var(--color-secondary);
-  border-radius: 4px;
-  padding: 0.15em 0.4em;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.88em;
-}
-.theory-editor .tiptap pre {
-  background: var(--color-editor);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 0.9em 1em;
-  overflow-x: auto;
-}
-.theory-editor .tiptap pre code {
-  background: none;
-  padding: 0;
-}
-.theory-editor .tiptap hr {
-  border: none;
-  border-top: 1px solid var(--color-border);
-  margin: 1.5em 0;
-}
-.theory-editor .tiptap a {
-  color: var(--color-html-accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 
 export type Theme = "light" | "dark";
 
@@ -30,9 +24,7 @@ function readInitialTheme(): Theme {
   if (typeof window === "undefined") return "dark";
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored === "light" || stored === "dark") return stored;
-  return window.matchMedia("(prefers-color-scheme: light)").matches
-    ? "light"
-    : "dark";
+  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -55,11 +47,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState((current) => (current === "dark" ? "light" : "dark"));
   }
 
-  return (
-    <ThemeContext value={{ theme, toggleTheme, setTheme }}>
-      {children}
-    </ThemeContext>
-  );
+  return <ThemeContext value={{ theme, toggleTheme, setTheme }}>{children}</ThemeContext>;
 }
 
 export function useTheme() {

@@ -1,60 +1,52 @@
 "use client";
 
-import { useState } from "react";
-import { Group, Panel, usePanelRef } from "react-resizable-panels";
 import { Eye, Terminal } from "lucide-react";
-
+import dynamic from "next/dynamic";
+import { Group, Panel } from "react-resizable-panels";
+import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 import { usePlayground } from "@/context/playground-context";
 import { useIsMobile } from "@/hooks/use-media-query";
-import { Header } from "./Header";
-import { EditorPanel } from "./EditorPanel";
-import { PreviewPanel } from "./PreviewPanel";
 import { ConsolePanel } from "./ConsolePanel";
-import { TheoryPanel } from "./TheoryPanel";
+import { EditorPanel } from "./EditorPanel";
+import { Header } from "./Header";
+import { PreviewPanel } from "./PreviewPanel";
 import { ResizeHandle } from "./ResizeHandle";
-import { Drawer, DrawerTrigger, DrawerContent } from "@/components/ui/drawer";
 
-// Header sizes in pixels. On desktop the header is fixed (min = max =
-// default) so it can never grow or shrink; on mobile it starts collapsed
-// (just the "Playground" label + chevron) and only the chevron button —
-// never a drag handle, since no Separator sits below it — can expand it
-// to reveal the rest of the controls.
-const HEADER_DESKTOP_SIZE = 48;
-const HEADER_MOBILE_COLLAPSED = 44;
-const HEADER_MOBILE_EXPANDED = 232;
+// Tiptap (the rich-text editor, ProseMirror, StarterKit's node/mark set)
+// only matters once someone opens the Theory tab, so it's loaded on
+// demand rather than bundled into the initial JS for the Practical view.
+const TheoryPanel = dynamic(
+  () => import("./TheoryPanel").then((mod) => mod.TheoryPanel),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+        Loading editor…
+      </div>
+    ),
+  },
+);
+
+// The header is a fixed-height Panel (not user-resizable — there's no
+// Separator below it) on every device. On mobile its "more options" now
+// live behind a drawer (see Header.tsx) rather than growing the header's
+// own height, so there's nothing to expand/collapse here anymore.
+const HEADER_HEIGHT = 48;
 
 export function Playground() {
   const { state } = usePlayground();
   const isMobile = useIsMobile();
-  const headerPanelRef = usePanelRef();
-  const [headerExpanded, setHeaderExpanded] = useState(false);
-
-  function toggleHeader() {
-    const panel = headerPanelRef.current;
-    if (!panel) return;
-    if (headerExpanded) {
-      panel.resize(HEADER_MOBILE_COLLAPSED);
-    } else {
-      panel.resize(HEADER_MOBILE_EXPANDED);
-    }
-    setHeaderExpanded(!headerExpanded);
-  }
 
   return (
     <Group orientation="vertical" className="h-dvh bg-background">
       <Panel
         id="header"
-        panelRef={headerPanelRef}
-        defaultSize={isMobile ? HEADER_MOBILE_COLLAPSED : HEADER_DESKTOP_SIZE}
-        minSize={isMobile ? HEADER_MOBILE_COLLAPSED : HEADER_DESKTOP_SIZE}
-        maxSize={isMobile ? HEADER_MOBILE_EXPANDED : HEADER_DESKTOP_SIZE}
+        defaultSize={HEADER_HEIGHT}
+        minSize={HEADER_HEIGHT}
+        maxSize={HEADER_HEIGHT}
         groupResizeBehavior="preserve-pixel-size"
       >
-        <Header
-          isMobile={isMobile}
-          expanded={isMobile && headerExpanded}
-          onToggleExpand={toggleHeader}
-        />
+        <Header isMobile={isMobile} />
       </Panel>
 
       <Panel id="main-content" minSize={120}>

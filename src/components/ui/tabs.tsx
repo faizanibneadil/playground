@@ -1,14 +1,11 @@
 "use client";
 
-import * as React from "react";
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
+import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-function Tabs({
-  className,
-  ...props
-}: React.ComponentProps<typeof TabsPrimitive.Root>) {
+function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
@@ -26,8 +23,8 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        "relative inline-flex h-7 items-center justify-center rounded-md bg-secondary/60 p-0.5 text-muted-foreground",
-        className
+        "relative inline-flex h-8 items-center justify-center rounded-md border border-border/70 bg-muted p-0.5 text-muted-foreground",
+        className,
       )}
       {...props}
     />
@@ -42,10 +39,10 @@ function TabsTrigger({
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
-        "relative z-10 inline-flex h-6 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-3 text-xs font-medium whitespace-nowrap transition-colors outline-none",
+        "relative z-10 inline-flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-3 text-xs font-medium whitespace-nowrap transition-colors outline-none",
         "data-[active]:text-foreground",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-        className
+        className,
       )}
       {...props}
     />
@@ -60,8 +57,8 @@ function TabsIndicator({
     <TabsPrimitive.Indicator
       data-slot="tabs-indicator"
       className={cn(
-        "absolute top-0.5 bottom-0.5 left-0 z-0 rounded-[5px] bg-background shadow-sm transition-[transform,width] duration-200 ease-out",
-        className
+        "absolute top-0.5 bottom-0.5 left-0 z-0 rounded-[5px] border border-border/60 bg-background shadow-sm transition-[transform,width] duration-200 ease-out",
+        className,
       )}
       {...props}
     />
@@ -81,4 +78,4 @@ function TabsContent({
   );
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsIndicator, TabsContent };
+export { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger };

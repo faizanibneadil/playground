@@ -1,10 +1,10 @@
-import { cssLanguage, cssCompletionSource } from "@codemirror/lang-css";
-import { LanguageSupport } from "@codemirror/language";
 import type {
   Completion,
   CompletionResult,
   CompletionSource,
 } from "@codemirror/autocomplete";
+import { cssCompletionSource, cssLanguage } from "@codemirror/lang-css";
+import { LanguageSupport } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
 
 // @codemirror/lang-css doesn't export a way to customize just the
@@ -21,12 +21,7 @@ const vscodeStylePropertyCompletion: CompletionSource = async (context) => {
 
     return {
       ...option,
-      apply: (
-        view: EditorView,
-        completion: Completion,
-        from: number,
-        to: number
-      ) => {
+      apply: (view: EditorView, completion: Completion, from: number, to: number) => {
         const insert = `${completion.label}: ;`;
         view.dispatch({
           changes: { from, to, insert },
@@ -45,6 +40,6 @@ const vscodeStylePropertyCompletion: CompletionSource = async (context) => {
 export function cssWithVscodeCompletion() {
   return new LanguageSupport(
     cssLanguage,
-    cssLanguage.data.of({ autocomplete: vscodeStylePropertyCompletion })
+    cssLanguage.data.of({ autocomplete: vscodeStylePropertyCompletion }),
   );
 }

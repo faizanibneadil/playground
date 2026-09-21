@@ -1,7 +1,7 @@
-import { EditorView, ViewUpdate } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import type { SyntaxNode } from "@lezer/common";
 import type { Extension } from "@codemirror/state";
+import { EditorView, type ViewUpdate } from "@codemirror/view";
+import type { SyntaxNode } from "@lezer/common";
 
 const TAG_NAME_RE = /^[a-zA-Z][a-zA-Z0-9:_.-]*$/;
 
@@ -15,9 +15,7 @@ function findEnclosingTagName(root: SyntaxNode, pos: number): SyntaxNode | null 
   return null;
 }
 
-function findMatchingTagName(
-  tagName: SyntaxNode
-): SyntaxNode | null {
+function findMatchingTagName(tagName: SyntaxNode): SyntaxNode | null {
   const tagNode = tagName.parent; // OpenTag or CloseTag
   if (!tagNode) return null;
   const isOpen = tagNode.name === "OpenTag";
@@ -25,7 +23,7 @@ function findMatchingTagName(
   if (!isOpen && !isClose) return null;
 
   const element = tagNode.parent;
-  if (!element || element.name !== "Element") return null;
+  if (element?.name !== "Element") return null;
 
   let other: SyntaxNode | null = null;
   for (let child = element.firstChild; child; child = child.nextSibling) {
@@ -57,7 +55,7 @@ export function htmlTagSync(): Extension {
     if (syncing || !update.docChanged) return;
 
     const isTrackedEdit = update.transactions.some(
-      (tr) => tr.isUserEvent("input") || tr.isUserEvent("delete")
+      (tr) => tr.isUserEvent("input") || tr.isUserEvent("delete"),
     );
     if (!isTrackedEdit) return;
 

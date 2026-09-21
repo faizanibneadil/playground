@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
-
-import { usePlayground } from "@/context/playground-context";
-import { sanitizeProjectNameInput, DEFAULT_PROJECT_NAME } from "@/lib/slugify";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { usePlayground } from "@/context/playground-context";
+import { DEFAULT_PROJECT_NAME, sanitizeProjectNameInput } from "@/lib/slugify";
 import { cn } from "@/lib/utils";
 
 export function ProjectNameField() {
@@ -63,7 +62,7 @@ export function ProjectNameField() {
       title="Click to rename this project"
       className={cn(
         "group flex h-6 items-center gap-1.5 rounded-md border border-transparent px-2 font-mono text-xs text-muted-foreground",
-        "hover:border-border hover:bg-secondary/60 hover:text-foreground transition-colors"
+        "hover:border-border hover:bg-secondary/60 hover:text-foreground transition-colors",
       )}
     >
       {projectName}

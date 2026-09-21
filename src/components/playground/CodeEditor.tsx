@@ -1,17 +1,18 @@
 "use client";
 
-import { useImperativeHandle, useCallback, useRef, forwardRef } from "react";
-import CodeMirror, { EditorView, type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { vscodeDark, vscodeLight } from "@uiw/codemirror-theme-vscode";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
-import { keymap } from "@codemirror/view";
 import { indentUnit } from "@codemirror/language";
-
-import { htmlTagSync } from "@/lib/codemirror/html-tag-sync";
-import { cssWithVscodeCompletion } from "@/lib/codemirror/css-property-completion";
-import { formatCode, type EditorLanguage } from "@/lib/format-code";
+import { keymap } from "@codemirror/view";
+import { vscodeDark, vscodeLight } from "@uiw/codemirror-theme-vscode";
+import CodeMirror, { EditorView, type ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
 import { useTheme } from "@/context/theme-context";
+import { autocompleteTooltipTheme } from "@/lib/codemirror/autocomplete-theme";
+import { cssWithVscodeCompletion } from "@/lib/codemirror/css-property-completion";
+import { customFoldGutter } from "@/lib/codemirror/fold-gutter-icons";
+import { htmlTagSync } from "@/lib/codemirror/html-tag-sync";
+import { type EditorLanguage, formatCode } from "@/lib/format-code";
 
 export interface CodeEditorHandle {
   format: () => Promise<void>;
@@ -23,6 +24,7 @@ interface CodeEditorProps {
   language: EditorLanguage;
   value: string;
   onChange: (value: string) => void;
+  lineWrap?: boolean;
   className?: string;
 }
 
@@ -33,12 +35,15 @@ function languageExtension(language: EditorLanguage) {
     case "css":
       return cssWithVscodeCompletion();
     case "javascript":
+      // Ships its own scope-aware completion source (keywords, snippets,
+      // and local variables), registered as this language's autocomplete
+      // data — no extra wiring needed for JS suggestions to show up.
       return javascript({ jsx: false });
   }
 }
 
 export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
-  function CodeEditor({ language, value, onChange, className }, ref) {
+  function CodeEditor({ language, value, onChange, lineWrap = true, className }, ref) {
     const cmRef = useRef<ReactCodeMirrorRef | null>(null);
     const { theme } = useTheme();
 
@@ -74,12 +79,14 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
         },
         focus: () => cmRef.current?.view?.focus(),
       }),
-      [format]
+      [format],
     );
 
     const extensions = [
       languageExtension(language),
       indentUnit.of("  "),
+      customFoldGutter(),
+      autocompleteTooltipTheme,
       keymap.of([
         {
           key: "Shift-Alt-f",
@@ -90,11 +97,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
           },
         },
       ]),
-      EditorView.lineWrapping,
     ];
-    if (language === "html") {
-      extensions.push(htmlTagSync());
-    }
+    if (lineWrap) extensions.push(EditorView.lineWrapping);
+    if (language === "html") extensions.push(htmlTagSync());
 
     return (
       <CodeMirror
@@ -106,7 +111,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
         extensions={extensions}
         basicSetup={{
           lineNumbers: true,
-          foldGutter: true,
+          foldGutter: false,
           highlightActiveLine: true,
           highlightActiveLineGutter: true,
           bracketMatching: true,
@@ -118,5 +123,5 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
         onChange={onChange}
       />
     );
-  }
+  },
 );
