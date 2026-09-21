@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import * as TabsPrimitive from "@radix-ui/react-tabs";
+import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
 import { cn } from "@/lib/utils";
 
@@ -26,7 +26,7 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        "inline-flex h-7 items-center justify-center rounded-md bg-secondary/60 p-0.5 text-muted-foreground",
+        "relative inline-flex h-7 items-center justify-center rounded-md bg-secondary/60 p-0.5 text-muted-foreground",
         className
       )}
       {...props}
@@ -37,14 +37,30 @@ function TabsList({
 function TabsTrigger({
   className,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+}: React.ComponentProps<typeof TabsPrimitive.Tab>) {
   return (
-    <TabsPrimitive.Trigger
+    <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
-        "inline-flex h-6 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-3 text-xs font-medium whitespace-nowrap transition-colors outline-none",
-        "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
-        "disabled:pointer-events-none disabled:opacity-50",
+        "relative z-10 inline-flex h-6 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-3 text-xs font-medium whitespace-nowrap transition-colors outline-none",
+        "data-[active]:text-foreground",
+        "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
+function TabsIndicator({
+  className,
+  ...props
+}: React.ComponentProps<typeof TabsPrimitive.Indicator>) {
+  return (
+    <TabsPrimitive.Indicator
+      data-slot="tabs-indicator"
+      className={cn(
+        "absolute top-0.5 bottom-0.5 left-0 z-0 rounded-[5px] bg-background shadow-sm transition-[transform,width] duration-200 ease-out",
         className
       )}
       {...props}
@@ -55,9 +71,9 @@ function TabsTrigger({
 function TabsContent({
   className,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Content>) {
+}: React.ComponentProps<typeof TabsPrimitive.Panel>) {
   return (
-    <TabsPrimitive.Content
+    <TabsPrimitive.Panel
       data-slot="tabs-content"
       className={cn("flex-1 outline-none", className)}
       {...props}
@@ -65,4 +81,4 @@ function TabsContent({
   );
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsContent };
+export { Tabs, TabsList, TabsTrigger, TabsIndicator, TabsContent };

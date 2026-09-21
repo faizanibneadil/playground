@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useImperativeHandle, useMemo, useRef, forwardRef } from "react";
+import { useImperativeHandle, useCallback, useRef, forwardRef } from "react";
 import CodeMirror, { EditorView, type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { vscodeDark } from "@uiw/codemirror-theme-vscode";
+import { vscodeDark, vscodeLight } from "@uiw/codemirror-theme-vscode";
 import { html } from "@codemirror/lang-html";
-import { css } from "@codemirror/lang-css";
 import { javascript } from "@codemirror/lang-javascript";
 import { keymap } from "@codemirror/view";
 import { indentUnit } from "@codemirror/language";
 
 import { htmlTagSync } from "@/lib/codemirror/html-tag-sync";
+import { cssWithVscodeCompletion } from "@/lib/codemirror/css-property-completion";
 import { formatCode, type EditorLanguage } from "@/lib/format-code";
+import { useTheme } from "@/context/theme-context";
 
 export interface CodeEditorHandle {
   format: () => Promise<void>;
@@ -30,7 +31,7 @@ function languageExtension(language: EditorLanguage) {
     case "html":
       return html({ autoCloseTags: true, matchClosingTags: true });
     case "css":
-      return css();
+      return cssWithVscodeCompletion();
     case "javascript":
       return javascript({ jsx: false });
   }
@@ -39,7 +40,13 @@ function languageExtension(language: EditorLanguage) {
 export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
   function CodeEditor({ language, value, onChange, className }, ref) {
     const cmRef = useRef<ReactCodeMirrorRef | null>(null);
+    const { theme } = useTheme();
 
+    // useImperativeHandle needs a genuinely stable callback identity to
+    // know when to rebuild the exposed handle — that's a correctness
+    // requirement of the hook itself, not a perf optimization, so this is
+    // one of the few spots we memoize by hand instead of leaning on the
+    // React Compiler.
     const format = useCallback(async () => {
       const view = cmRef.current?.view;
       if (!view) return;
@@ -70,27 +77,24 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
       [format]
     );
 
-    const extensions = useMemo(() => {
-      const shared = [
-        languageExtension(language),
-        indentUnit.of("  "),
-        keymap.of([
-          {
-            key: "Shift-Alt-f",
-            mac: "Shift-Alt-f",
-            run: () => {
-              void format();
-              return true;
-            },
+    const extensions = [
+      languageExtension(language),
+      indentUnit.of("  "),
+      keymap.of([
+        {
+          key: "Shift-Alt-f",
+          mac: "Shift-Alt-f",
+          run: () => {
+            void format();
+            return true;
           },
-        ]),
-        EditorView.lineWrapping,
-      ];
-      if (language === "html") {
-        shared.push(htmlTagSync());
-      }
-      return shared;
-    }, [language, format]);
+        },
+      ]),
+      EditorView.lineWrapping,
+    ];
+    if (language === "html") {
+      extensions.push(htmlTagSync());
+    }
 
     return (
       <CodeMirror
@@ -98,7 +102,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
         className={className}
         value={value}
         height="100%"
-        theme={vscodeDark}
+        theme={theme === "dark" ? vscodeDark : vscodeLight}
         extensions={extensions}
         basicSetup={{
           lineNumbers: true,

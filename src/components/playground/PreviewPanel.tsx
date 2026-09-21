@@ -3,17 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { RotateCw } from "lucide-react";
 
-import { usePlaygroundStore } from "@/store/playground-store";
+import { usePlayground } from "@/context/playground-context";
 import { buildPreviewDocument } from "@/lib/preview-document";
 import { Button } from "@/components/ui/button";
 
 const REFRESH_DEBOUNCE_MS = 400;
 
 export function PreviewPanel() {
-  const files = usePlaygroundStore((s) => s.files);
-  const runVersion = usePlaygroundStore((s) => s.runVersion);
-  const addLog = usePlaygroundStore((s) => s.addLog);
-  const clearLogs = usePlaygroundStore((s) => s.clearLogs);
+  const { state, actions } = usePlayground();
+  const { files, runVersion } = state;
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [srcDoc, setSrcDoc] = useState("");
@@ -21,20 +19,21 @@ export function PreviewPanel() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      clearLogs();
+      actions.clearLogs();
       setSrcDoc(buildPreviewDocument(files.html, files.css, files.js));
       setLastRunAt(new Date());
     }, runVersion === 0 ? 0 : REFRESH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
     // Re-run whenever the files change, or "Run" is pressed (runVersion bump).
-  }, [files.html, files.css, files.js, runVersion, clearLogs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files.html, files.css, files.js, runVersion]);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const data = event.data;
       if (!data || !data.__playgroundConsole) return;
-      addLog({
+      actions.addLog({
         level: data.level,
         message: data.message,
         timestamp: Date.now(),
@@ -42,7 +41,8 @@ export function PreviewPanel() {
     }
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [addLog]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex h-full flex-col bg-panel">
@@ -60,7 +60,7 @@ export function PreviewPanel() {
             className="h-5 w-5"
             title="Refresh preview"
             onClick={() => {
-              clearLogs();
+              actions.clearLogs();
               setSrcDoc(buildPreviewDocument(files.html, files.css, files.js));
               setLastRunAt(new Date());
             }}

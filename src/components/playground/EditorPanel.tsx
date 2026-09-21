@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { Sparkles } from "lucide-react";
 
-import { usePlaygroundStore, type FileKey } from "@/store/playground-store";
+import { usePlayground, type FileKey } from "@/context/playground-context";
 import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,10 +16,8 @@ const FILE_TABS: { key: FileKey; label: string; language: EditorLanguage; dotCla
 ];
 
 export function EditorPanel() {
-  const activeFile = usePlaygroundStore((s) => s.activeFile);
-  const setActiveFile = usePlaygroundStore((s) => s.setActiveFile);
-  const files = usePlaygroundStore((s) => s.files);
-  const setFileContent = usePlaygroundStore((s) => s.setFileContent);
+  const { state, actions } = usePlayground();
+  const { activeFile, files } = state;
 
   const editorRefs = useRef<Partial<Record<FileKey, CodeEditorHandle | null>>>({});
 
@@ -31,7 +29,7 @@ export function EditorPanel() {
             <button
               key={tab.key}
               onClick={() => {
-                setActiveFile(tab.key);
+                actions.setActiveFile(tab.key);
                 requestAnimationFrame(() => editorRefs.current[tab.key]?.refresh());
               }}
               className={cn(
@@ -76,7 +74,7 @@ export function EditorPanel() {
               }}
               language={tab.language}
               value={files[tab.key]}
-              onChange={(value) => setFileContent(tab.key, value)}
+              onChange={(value) => actions.setFileContent(tab.key, value)}
               className="h-full"
             />
           </div>

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Trash2 } from "lucide-react";
 
-import { usePlaygroundStore } from "@/store/playground-store";
+import { usePlayground } from "@/context/playground-context";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -22,8 +22,8 @@ const LEVEL_PREFIX: Record<string, string> = {
 };
 
 export function ConsolePanel() {
-  const logs = usePlaygroundStore((s) => s.logs);
-  const clearLogs = usePlaygroundStore((s) => s.clearLogs);
+  const { state, actions } = usePlayground();
+  const { logs } = state;
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export function ConsolePanel() {
           size="icon"
           className="h-5 w-5"
           title="Clear console"
-          onClick={clearLogs}
+          onClick={() => actions.clearLogs()}
         >
           <Trash2 className="size-3" />
         </Button>

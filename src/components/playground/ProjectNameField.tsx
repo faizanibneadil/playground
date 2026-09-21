@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 
-import { usePlaygroundStore } from "@/store/playground-store";
+import { usePlayground } from "@/context/playground-context";
 import { sanitizeProjectNameInput, DEFAULT_PROJECT_NAME } from "@/lib/slugify";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export function ProjectNameField() {
-  const projectName = usePlaygroundStore((s) => s.projectName);
-  const setProjectName = usePlaygroundStore((s) => s.setProjectName);
+  const { state, actions } = usePlayground();
+  const projectName = state.projectName;
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(projectName);
@@ -25,7 +25,7 @@ export function ProjectNameField() {
 
   function commit() {
     setEditing(false);
-    setProjectName(draft.trim().length > 0 ? draft : DEFAULT_PROJECT_NAME);
+    actions.setProjectName(draft.trim().length > 0 ? draft : DEFAULT_PROJECT_NAME);
   }
 
   if (editing) {
