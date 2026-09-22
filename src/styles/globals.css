@@ -205,3 +205,50 @@ body {
   color: var(--color-muted-foreground);
   pointer-events: none;
 }
+/* Syntax highlighting for Theory-tab code blocks (CodeBlockLowlight).
+ * shadcn/typeset styles the <pre>/<code> box itself; these are just the
+ * per-token colors, reusing the same accent tokens as the rest of the
+ * app rather than introducing new ones, and adapted for both themes. */
+ .hljs-comment,
+ .hljs-quote {
+   color: var(--color-muted-foreground);
+   font-style: italic;
+ }
+ .hljs-keyword,
+ .hljs-selector-tag,
+ .hljs-literal,
+ .hljs-section,
+ .hljs-link {
+   color: var(--html-accent);
+ }
+ .hljs-string,
+ .hljs-attr,
+ .hljs-symbol,
+ .hljs-bullet,
+ .hljs-addition {
+   color: var(--css-accent);
+ }
+ .hljs-number,
+ .hljs-title,
+ .hljs-title.function_,
+ .hljs-title.class_,
+ .hljs-built_in,
+ .hljs-type {
+   color: var(--js-accent);
+ }
+ .hljs-variable,
+ .hljs-template-variable,
+ .hljs-attribute,
+ .hljs-name,
+ .hljs-tag {
+   color: var(--color-foreground);
+ }
+ .hljs-deletion {
+   color: var(--color-destructive);
+ }
+ .hljs-emphasis {
+   font-style: italic;
+ }
+ .hljs-strong {
+   font-weight: 700;
+ }

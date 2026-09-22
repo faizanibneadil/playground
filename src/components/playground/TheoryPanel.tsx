@@ -1,10 +1,12 @@
 "use client";
 
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Placeholder from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
 import { usePlayground } from "@/context/playground-context";
+import { lowlight } from "@/lib/lowlight-instance";
 
 /**
  * A live, WYSIWYG-style markdown editor for lesson notes — typing "# ",
@@ -15,7 +17,10 @@ import { usePlayground } from "@/context/playground-context";
  *
  * Typography comes entirely from shadcn/typeset (see globals.css and
  * typeset.css) via the `typeset typeset-docs` classes below — no
- * bespoke CSS for headings/lists/code lives in this app anymore.
+ * bespoke CSS for headings/lists/code lives in this app. Code blocks
+ * (```ts, ```css, ```html, ...) get real syntax highlighting via
+ * CodeBlockLowlight — see lowlight-instance.ts for the registered
+ * languages, and globals.css for the `.hljs-*` token colors.
  */
 export function TheoryPanel() {
   const { state, actions } = usePlayground();
@@ -25,7 +30,13 @@ export function TheoryPanel() {
     // SSR/hydration mismatch on the first paint.
     immediatelyRender: false,
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        // StarterKit's own plain CodeBlock is replaced by the
+        // syntax-highlighted one below — the ``` input rule (and the
+        // language after it) still works the same way.
+        codeBlock: false,
+      }),
+      CodeBlockLowlight.configure({ lowlight }),
       Placeholder.configure({
         placeholder:
           'Write your lesson notes here — try "# " for a heading, "- " for a bullet list, or "1. " for a numbered list…',

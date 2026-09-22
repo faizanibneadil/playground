@@ -42,7 +42,7 @@ export default function RootLayout({
             build-time constant string (THEME_INIT_SCRIPT) — no user input
             ever reaches this, and it must run before hydration to avoid a
             flash of the wrong theme. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} /> */}
       </head>
       <body className="antialiased h-full overflow-hidden" suppressHydrationWarning>
         <ThemeProvider>{children}</ThemeProvider>

@@ -64,23 +64,21 @@ export function Playground() {
 
 function DesktopPracticalView() {
   return (
-    <Group orientation="vertical" className="h-full">
-      <Panel id="editor-preview-row" defaultSize={70} minSize={20}>
-        <Group orientation="horizontal" className="h-full">
-          <Panel id="editor" defaultSize={50} minSize={20}>
-            <EditorPanel />
-          </Panel>
-          <ResizeHandle direction="horizontal" />
-          <Panel id="preview" defaultSize={50} minSize={20}>
+    <Group orientation="horizontal" className="h-full">
+      <Panel id="editor" defaultSize={50} minSize={20}>
+        <EditorPanel />
+      </Panel>
+      <ResizeHandle direction="horizontal" />
+      <Panel id="preview-console-column" defaultSize={50} minSize={20}>
+        <Group orientation="vertical" className="h-full">
+          <Panel id="preview" defaultSize={70} minSize={15}>
             <PreviewPanel />
           </Panel>
+          <ResizeHandle direction="vertical" />
+          <Panel id="console" defaultSize={30} minSize={10}>
+            <ConsolePanel />
+          </Panel>
         </Group>
-      </Panel>
-      {/* The console spans the full width, below both the editor and the
-          preview — not nested under the preview column. */}
-      <ResizeHandle direction="vertical" />
-      <Panel id="console" defaultSize={30} minSize={10}>
-        <ConsolePanel />
       </Panel>
     </Group>
   );
