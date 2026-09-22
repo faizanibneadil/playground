@@ -36,7 +36,15 @@ export function TheoryPanel() {
         // language after it) still works the same way.
         codeBlock: false,
       }),
-      CodeBlockLowlight.configure({ lowlight }),
+      CodeBlockLowlight.configure({
+        lowlight,
+        // Off by default in Tiptap: without this, Tab/Shift-Tab inside a
+        // code block just moves focus out instead of indenting/dedenting
+        // the current line(s) — this is what actually makes indentation
+        // "work" while typing code.
+        enableTabIndentation: true,
+        tabSize: 2,
+      }),
       Placeholder.configure({
         placeholder:
           'Write your lesson notes here — try "# " for a heading, "- " for a bullet list, or "1. " for a numbered list…',
