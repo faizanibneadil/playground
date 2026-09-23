@@ -7,6 +7,8 @@ import { usePlayground } from "@/context/playground-context";
 import { DEFAULT_PROJECT_NAME, sanitizeProjectNameInput } from "@/lib/slugify";
 import { cn } from "@/lib/utils";
 
+const MAX_PROJECT_NAME_LENGTH = 100;
+
 export function ProjectNameField() {
   const { state, actions } = usePlayground();
   const projectName = state.projectName;
@@ -32,7 +34,9 @@ export function ProjectNameField() {
       <Input
         ref={inputRef}
         value={draft}
-        onChange={(e) => setDraft(sanitizeProjectNameInput(e.target.value))}
+        onChange={(e) =>
+          setDraft(sanitizeProjectNameInput(e.target.value).slice(0, MAX_PROJECT_NAME_LENGTH))
+        }
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
@@ -47,7 +51,8 @@ export function ProjectNameField() {
         }}
         spellCheck={false}
         placeholder="project-name"
-        className="h-6 w-40 font-mono text-xs"
+        maxLength={MAX_PROJECT_NAME_LENGTH}
+        className="h-6 w-32 font-mono text-xs sm:w-44"
       />
     );
   }
@@ -61,12 +66,12 @@ export function ProjectNameField() {
       }}
       title="Click to rename this project"
       className={cn(
-        "group flex h-6 items-center gap-1.5 rounded-md border border-transparent px-2 font-mono text-xs text-muted-foreground",
+        "group flex h-6 max-w-[70vw] items-center gap-1.5 truncate rounded-md border border-transparent px-2 font-mono text-xs text-muted-foreground",
         "hover:border-border hover:bg-secondary/60 hover:text-foreground transition-colors",
       )}
     >
-      {projectName}
-      <Pencil className="size-3 opacity-0 transition-opacity group-hover:opacity-70" />
+      <span className="truncate">{projectName}</span>
+      <Pencil className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-70" />
     </button>
   );
 }

@@ -40,8 +40,9 @@ interface PlaygroundState {
   theory: string;
   activeFile: FileKey;
   mainView: MainView;
-  autoSave: boolean;
-  saveStatus: "idle" | "saved" | "unsaved";
+  /** Play (true) = preview auto-refreshes as you type. Pause (false) =
+   * edits are ignored until you resume (or Reset explicitly runs). */
+  autoRun: boolean;
   logs: ConsoleLogEntry[];
   runVersion: number;
 }
@@ -52,8 +53,7 @@ type Action =
   | { type: "SET_THEORY"; content: string }
   | { type: "SET_ACTIVE_FILE"; file: FileKey }
   | { type: "SET_MAIN_VIEW"; view: MainView }
-  | { type: "SET_AUTOSAVE"; value: boolean }
-  | { type: "SET_SAVE_STATUS"; status: PlaygroundState["saveStatus"] }
+  | { type: "SET_AUTORUN"; value: boolean }
   | { type: "RESET" }
   | { type: "RUN" }
   | { type: "ADD_LOG"; entry: Omit<ConsoleLogEntry, "id"> }
@@ -68,8 +68,7 @@ const initialState: PlaygroundState = {
   theory: "",
   activeFile: "html",
   mainView: "practical",
-  autoSave: true,
-  saveStatus: "idle",
+  autoRun: true,
   logs: [],
   runVersion: 0,
 };
@@ -87,28 +86,20 @@ function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundSt
       return {
         ...state,
         files: { ...state.files, [action.file]: action.content },
-        saveStatus: state.autoSave ? "unsaved" : state.saveStatus,
       };
     case "SET_THEORY":
-      return {
-        ...state,
-        theory: action.content,
-        saveStatus: state.autoSave ? "unsaved" : state.saveStatus,
-      };
+      return { ...state, theory: action.content };
     case "SET_ACTIVE_FILE":
       return { ...state, activeFile: action.file };
     case "SET_MAIN_VIEW":
       return { ...state, mainView: action.view };
-    case "SET_AUTOSAVE":
-      return { ...state, autoSave: action.value };
-    case "SET_SAVE_STATUS":
-      return { ...state, saveStatus: action.status };
+    case "SET_AUTORUN":
+      return { ...state, autoRun: action.value };
     case "RESET":
       return {
         ...state,
         files: { ...DEFAULT_FILES },
         activeFile: "html",
-        saveStatus: "idle",
         runVersion: state.runVersion + 1,
       };
     case "RUN":
@@ -132,7 +123,6 @@ function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundSt
         projectName: action.payload.projectName,
         files: action.payload.files,
         theory: action.payload.theory,
-        saveStatus: "saved",
       };
     default:
       return state;
@@ -169,7 +159,7 @@ interface PlaygroundActions {
   setTheory: (content: string) => void;
   setActiveFile: (file: FileKey) => void;
   setMainView: (view: MainView) => void;
-  setAutoSave: (value: boolean) => void;
+  setAutoRun: (value: boolean) => void;
   reset: () => void;
   run: () => void;
   addLog: (entry: Omit<ConsoleLogEntry, "id">) => void;
@@ -197,23 +187,21 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "RUN" });
   }, []);
 
-  // Debounced auto-save: whenever the files/theory/project name change and
-  // auto-save is on, persist to localStorage a moment after typing stops.
+  // Save to localStorage a moment after typing stops. This always runs
+  // silently in the background now — there's no user-facing toggle for it.
   useEffect(() => {
-    if (!state.autoSave) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      const ok = persist({
+      persist({
         projectName: state.projectName,
         files: state.files,
         theory: state.theory,
       });
-      dispatch({ type: "SET_SAVE_STATUS", status: ok ? "saved" : "unsaved" });
     }, SAVE_DEBOUNCE_MS);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [state.autoSave, state.projectName, state.files, state.theory]);
+  }, [state.projectName, state.files, state.theory]);
 
   const actions: PlaygroundActions = {
     setProjectName: (name) => dispatch({ type: "SET_PROJECT_NAME", name }),
@@ -221,7 +209,7 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     setTheory: (content) => dispatch({ type: "SET_THEORY", content }),
     setActiveFile: (file) => dispatch({ type: "SET_ACTIVE_FILE", file }),
     setMainView: (view) => dispatch({ type: "SET_MAIN_VIEW", view }),
-    setAutoSave: (value) => dispatch({ type: "SET_AUTOSAVE", value }),
+    setAutoRun: (value) => dispatch({ type: "SET_AUTORUN", value }),
     reset: () => dispatch({ type: "RESET" }),
     run: () => dispatch({ type: "RUN" }),
     addLog: (entry) => dispatch({ type: "ADD_LOG", entry }),

@@ -10,28 +10,42 @@ const REFRESH_DEBOUNCE_MS = 400;
 
 export function PreviewPanel() {
   const { state, actions } = usePlayground();
-  const { files, runVersion } = state;
+  const { files, runVersion, autoRun } = state;
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [srcDoc, setSrcDoc] = useState("");
   const [lastRunAt, setLastRunAt] = useState<Date | null>(null);
 
-  // Re-run whenever the files change, or "Run" is pressed (runVersion bump).
-  // `actions` is stable in practice (see PlaygroundProvider) and
-  // deliberately left out so this effect isn't keyed to context identity.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: actions.clearLogs is stable in practice and deliberately omitted, see comment above.
-  useEffect(() => {
-    const timer = setTimeout(
-      () => {
-        actions.clearLogs();
-        setSrcDoc(buildPreviewDocument(files.html, files.css, files.js));
-        setLastRunAt(new Date());
-      },
-      runVersion === 0 ? 0 : REFRESH_DEBOUNCE_MS,
+  // Keep the latest files available to the runVersion-triggered effect
+  // below without adding `files` to its dependency array.
+  const filesRef = useRef(files);
+  filesRef.current = files;
+
+  function refreshPreview() {
+    actions.clearLogs();
+    setSrcDoc(
+      buildPreviewDocument(filesRef.current.html, filesRef.current.css, filesRef.current.js),
     );
+    setLastRunAt(new Date());
+  }
+
+  // Auto-run: while playing, re-run a moment after typing stops. While
+  // paused, file edits are silently ignored here.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshPreview reads filesRef/actions freshly and doesn't need to be a dependency.
+  useEffect(() => {
+    if (!autoRun) return;
+    const timer = setTimeout(refreshPreview, REFRESH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files.html, files.css, files.js, runVersion]);
+  }, [files.html, files.css, files.js, autoRun]);
+
+  // Explicit runs: initial mount, Reset, and resuming from pause all bump
+  // runVersion and should refresh immediately, regardless of autoRun.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshPreview reads filesRef/actions freshly and doesn't need to be a dependency.
+  useEffect(() => {
+    refreshPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runVersion]);
 
   // Runs once: the message listener reads `actions` fresh via closure and
   // doesn't need to be re-subscribed when it changes identity.
@@ -67,11 +81,7 @@ export function PreviewPanel() {
             size="icon"
             className="h-5 w-5"
             title="Refresh preview"
-            onClick={() => {
-              actions.clearLogs();
-              setSrcDoc(buildPreviewDocument(files.html, files.css, files.js));
-              setLastRunAt(new Date());
-            }}
+            onClick={refreshPreview}
           >
             <RotateCw className="size-3" />
           </Button>

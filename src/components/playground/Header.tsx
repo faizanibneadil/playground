@@ -1,128 +1,98 @@
 "use client";
 
-import { ChevronDown, Play, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
-import { Label } from "@/components/ui/label";
+import { Pause, Play, RotateCcw } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { usePlayground } from "@/context/playground-context";
 import { ProjectNameField } from "./ProjectNameField";
 import { ThemeToggle } from "./ThemeToggle";
 import { ViewTabs } from "./ViewTabs";
 
-function RunResetControls({ fullWidth = false }: { fullWidth?: boolean }) {
-  const { actions } = usePlayground();
-  return (
-    <>
-      <Button
-        size="sm"
-        onClick={() => actions.run()}
-        className={fullWidth ? "flex-1 gap-1.5" : "gap-1.5"}
-      >
-        <Play className="size-3 fill-current" />
-        Run
-      </Button>
-      <Button
-        size="sm"
-        variant="secondary"
-        className={fullWidth ? "flex-1 gap-1.5" : "gap-1.5"}
-        onClick={() => {
-          if (window.confirm("Reset HTML, CSS and JS back to the starter template?")) {
-            actions.reset();
-          }
-        }}
-      >
-        <RotateCcw className="size-3" />
-        Reset
-      </Button>
-    </>
-  );
-}
-
-function AutoSaveToggle() {
+/** Replaces the old separate "Run" button + auto-run checkbox with a
+ * single play/pause toggle. Playing = the preview keeps re-running as
+ * you type (the previous default behaviour); pausing stops that until
+ * you resume, at which point it also runs once immediately. */
+function AutoRunToggle() {
   const { state, actions } = usePlayground();
+  const isPlaying = state.autoRun;
+
   return (
-    <Label htmlFor="autosave" className="cursor-pointer text-muted-foreground">
-      <Checkbox
-        id="autosave"
-        checked={state.autoSave}
-        onCheckedChange={(checked:boolean) => actions.setAutoSave(checked === true)}
-      />
-      Auto-save
-      <span className="text-[11px]">
-        {state.autoSave
-          ? state.saveStatus === "saved"
-            ? "(saved)"
-            : "(saving…)"
-          : "(off)"}
-      </span>
-    </Label>
+    <Button
+      size="icon"
+      className="text-white"
+      onClick={() => {
+        const next = !isPlaying;
+        actions.setAutoRun(next);
+        if (next) actions.run();
+      }}
+      title={isPlaying ? "Pause auto-run" : "Resume auto-run"}
+      aria-label={isPlaying ? "Pause auto-run" : "Resume auto-run"}
+    >
+      {isPlaying ? (
+        <Pause className="size-3.5 fill-current" />
+      ) : (
+        <Play className="size-3.5 fill-current " />
+      )}
+    </Button>
   );
 }
 
-/** The "Playground" title — on mobile it's also the trigger for the
- * options drawer (project name, auto-save, run, reset); on desktop the
- * project name field just sits next to it inline. */
-function TitleBlock({ isMobile }: { isMobile: boolean }) {
-  const title = (
-    <h1 className="text-sm font-semibold tracking-tight text-foreground">Playground</h1>
-  );
-
-  if (!isMobile) {
-    return (
-      <div className="flex items-center gap-2.5">
-        {/* {title} */}
-        <ProjectNameField />
-      </div>
-    );
-  }
+function ResetButton() {
+  const { actions } = usePlayground();
 
   return (
-    <Drawer>
-      <DrawerTrigger className="flex items-center gap-1.5 rounded-md px-2 py-1.5 hover:bg-accent">
-        {title}
-        <ChevronDown className="size-3.5 text-muted-foreground" />
-      </DrawerTrigger>
-      <DrawerContent title="Playground options" className="h-auto max-h-[80dvh]">
-        <div className="flex flex-col gap-4 p-4">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground">
-              Project name
-            </span>
-            <ProjectNameField />
-          </div>
-          <AutoSaveToggle />
-          <div className="flex gap-2">
-            <RunResetControls fullWidth />
-          </div>
-        </div>
-      </DrawerContent>
-    </Drawer>
+    <AlertDialog>
+      <AlertDialogTrigger
+        className={buttonVariants({ variant: "secondary", size: "icon" })}
+        title="Reset playground"
+        aria-label="Reset playground"
+      >
+        <RotateCcw className="size-3.5" />
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Reset this playground?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Your HTML, CSS and JS will be replaced with the starter template. This
+            can&apos;t be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={() => actions.reset()}>Reset</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
-export function Header({ isMobile }: { isMobile: boolean }) {
+/** Same 3-section header on every device now: Theory/Practical tabs on
+ * the left, the editable project name in the center, and play/pause +
+ * reset + theme toggle on the right. No more mobile options drawer. */
+export function Header() {
   return (
     <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-panel px-2 sm:px-3">
-      {/* Left: Theory / Practical tabs on every device. */}
       <div className="flex min-w-0 flex-1 items-center">
         <ViewTabs />
       </div>
 
-      {/* Center: the Playground title. */}
       <div className="flex shrink-0 items-center justify-center">
-        <TitleBlock isMobile={isMobile} />
+        <ProjectNameField />
       </div>
 
-      {/* Right: auto-save/run/reset inline on desktop (mobile keeps those
-          behind the drawer above), theme toggle always visible. */}
-      <div className="flex flex-1 items-center justify-end gap-3">
-        {!isMobile && (
-          <>
-            <AutoSaveToggle />
-            <RunResetControls />
-          </>
-        )}
+      <div className="flex flex-1 items-center justify-end gap-1.5">
+        <AutoRunToggle />
+        <ResetButton />
         <ThemeToggle />
       </div>
     </header>

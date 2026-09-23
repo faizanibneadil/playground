@@ -28,9 +28,8 @@ const TheoryPanel = dynamic(
 );
 
 // The header is a fixed-height Panel (not user-resizable — there's no
-// Separator below it) on every device. On mobile its "more options" now
-// live behind a drawer (see Header.tsx) rather than growing the header's
-// own height, so there's nothing to expand/collapse here anymore.
+// Separator below it) and is identical on mobile and desktop now (see
+// Header.tsx) — there's no options drawer anymore.
 const HEADER_HEIGHT = 48;
 
 export function Playground() {
@@ -46,7 +45,7 @@ export function Playground() {
         maxSize={HEADER_HEIGHT}
         groupResizeBehavior="preserve-pixel-size"
       >
-        <Header isMobile={isMobile} />
+        <Header />
       </Panel>
 
       <Panel id="main-content" minSize={120}>
