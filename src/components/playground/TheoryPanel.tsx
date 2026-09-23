@@ -7,6 +7,7 @@ import StarterKit from "@tiptap/starter-kit";
 
 import { usePlayground } from "@/context/playground-context";
 import { lowlight } from "@/lib/lowlight-instance";
+import { SmartCodeIndent } from "@/lib/tiptap/smart-code-indent";
 
 /**
  * A live, WYSIWYG-style markdown editor for lesson notes — typing "# ",
@@ -40,11 +41,15 @@ export function TheoryPanel() {
         lowlight,
         // Off by default in Tiptap: without this, Tab/Shift-Tab inside a
         // code block just moves focus out instead of indenting/dedenting
-        // the current line(s) — this is what actually makes indentation
-        // "work" while typing code.
+        // the current line(s).
         enableTabIndentation: true,
         tabSize: 2,
       }),
+      // Must come after CodeBlockLowlight so CodeBlock's own Enter
+      // handler (triple-Enter-to-exit the block) gets first refusal —
+      // this only fires when that one doesn't apply. See the file for
+      // exactly what it does.
+      SmartCodeIndent,
       Placeholder.configure({
         placeholder:
           'Write your lesson notes here — try "# " for a heading, "- " for a bullet list, or "1. " for a numbered list…',
@@ -56,14 +61,20 @@ export function TheoryPanel() {
     },
     editorProps: {
       attributes: {
-        class: "typeset typeset-docs max-w-[37em] focus:outline-none",
+        // "tiptap" is included explicitly (not just relying on Tiptap's
+        // own default) because our placeholder and syntax-highlighting
+        // CSS below is scoped under `.tiptap` — this guarantees it always
+        // matches regardless of how attributes.class gets merged.
+        class: "tiptap typeset typeset-docs max-w-[37em] focus:outline-none",
       },
     },
   });
 
   return (
-    <div className="h-full overflow-y-auto bg-editor px-6 py-10 sm:px-10">
-      <EditorContent editor={editor} className="mx-auto max-w-[37em]" />
+    <div className="flex h-full flex-col overflow-y-auto bg-editor">
+      <div className="mx-auto flex w-full max-w-[37em] flex-1 flex-col px-6 py-10 sm:px-10">
+        <EditorContent editor={editor} className="flex flex-1 flex-col" />
+      </div>
     </div>
   );
 }

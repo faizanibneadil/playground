@@ -253,3 +253,113 @@ body {
 .hljs-strong {
   font-weight: 700;
 }
+
+/* Tiptap's Placeholder extension needs this to render its empty-state
+ * text — this is a functional hook for the extension, not typography, so
+ * it stays outside shadcn/typeset (which only styles rendered content). */
+ .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--color-muted-foreground);
+  pointer-events: none;
+}
+
+/* Tiptap's editor root only sizes to its content by default (a document
+ * with just one empty paragraph is a single line tall). Forcing it to at
+ * least fill its scroll container is what makes the Theory tab look
+ * "full height" even when there's little or no text yet — it can still
+ * grow taller than this and scroll normally once there's more content. */
+.tiptap.typeset-docs {
+  flex: 1 1 auto;
+  min-height: 100%;
+  outline: none;
+}
+
+/* Syntax highlighting for Theory-tab code blocks (CodeBlockLowlight).
+ * shadcn/typeset styles the <pre>/<code> box itself; these are just the
+ * per-token colors, reusing the same three accent tokens as the rest of
+ * the app (rather than introducing new ones) and adapted for both
+ * themes. Class names follow highlight.js's standard token set, so this
+ * covers HTML tags/attributes and CSS selectors as well as JS/TS. */
+.typeset pre code {
+  tab-size: 2;
+  white-space: pre;
+}
+
+/* Comments. */
+.hljs-comment,
+.hljs-quote {
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+
+/* Keywords, HTML tag names, CSS element selectors. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-name,
+.hljs-doctag,
+.hljs-formula {
+  color: var(--html-accent);
+  font-weight: 600;
+}
+
+/* The angle brackets / punctuation wrapping an HTML tag as a whole. */
+.hljs-tag {
+  color: var(--color-muted-foreground);
+}
+
+/* Strings, attribute values, CSS property names, regexes. */
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string {
+  color: var(--css-accent);
+}
+
+/* HTML/JSX attribute names, CSS class (.foo) and id (#foo) selectors,
+ * pseudo-classes/elements, and other attribute-like selectors. */
+.hljs-attr,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: var(--js-accent);
+  font-weight: 600;
+}
+
+/* Numbers, types, built-ins, class/function titles. */
+.hljs-number,
+.hljs-literal,
+.hljs-type,
+.hljs-built_in,
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_,
+.hljs-class .hljs-title {
+  color: var(--js-accent);
+}
+
+/* Plain identifiers — variables, template placeholders, function params. */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: var(--color-foreground);
+}
+
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-meta {
+  color: var(--css-accent);
+}
+.hljs-deletion {
+  color: var(--color-destructive);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 700;
+}
