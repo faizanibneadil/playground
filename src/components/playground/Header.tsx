@@ -17,6 +17,7 @@ import { usePlayground } from "@/context/playground-context";
 import { ProjectNameField } from "./ProjectNameField";
 import { ThemeToggle } from "./ThemeToggle";
 import { ViewTabs } from "./ViewTabs";
+import { useState } from "react";
 
 /** Replaces the old separate "Run" button + auto-run checkbox with a
  * single play/pause toggle. Playing = the preview keeps re-running as
@@ -49,9 +50,10 @@ function AutoRunToggle() {
 
 function ResetButton() {
   const { actions } = usePlayground();
+  const [open, setOpen] = useState(false);
 
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger
         className={buttonVariants({ variant: "secondary", size: "icon" })}
         title="Reset playground"
@@ -69,7 +71,14 @@ function ResetButton() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={() => actions.reset()}>Reset</AlertDialogAction>
+          <AlertDialogAction
+            onClick={() => {
+              actions.reset();
+              setOpen(false);
+            }}
+          >
+            Reset
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
