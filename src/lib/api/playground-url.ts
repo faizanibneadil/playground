@@ -6,6 +6,7 @@ export interface PlaygroundStateData {
   html: string;
   css: string;
   js: string;
+  theory: string;
 }
 
 export interface PlaygroundUrlState {
@@ -69,8 +70,9 @@ export async function createPlaygroundUrl(data: PlaygroundStateData): Promise<Ur
   });
 }
 
-/** Updates the same record's code and points longURL at this playground's
- * own share URL. Called every time Share is clicked (idempotent). */
+/** Updates the same record's code + theory and points longURL at this
+ * playground's own share URL. Called every time Share is clicked
+ * (idempotent). */
 export async function updatePlaygroundUrl(
   id: string,
   data: PlaygroundStateData,

@@ -40,6 +40,7 @@ interface PlaygroundFiles {
 interface HydratePayload {
   projectName: string;
   files: PlaygroundFiles;
+  theory: string;
   playgroundId: string;
 }
 
@@ -142,6 +143,7 @@ function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundSt
         ...state,
         projectName: action.payload.projectName,
         files: action.payload.files,
+        theory: action.payload.theory,
         playgroundId: action.payload.playgroundId,
         runVersion: state.runVersion + 1,
       };
@@ -170,8 +172,8 @@ interface PlaygroundActions {
   clearLogs: () => void;
   /** Creates the record on first save. Returns true on success. */
   save: () => Promise<boolean>;
-  /** Updates the record's code + longURL, then opens the native share
-   * sheet (falls back to clipboard copy). Returns true on success. */
+  /** Updates the record's code/theory + longURL, then opens the native
+   * share sheet (falls back to clipboard copy). Returns true on success. */
   share: () => Promise<boolean>;
   /** Deletes the linked record (if any) and returns to a fresh, unsaved
    * playground. Returns true on success — false leaves everything
@@ -212,7 +214,8 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
   }
 
   // On mount: if the URL already carries a playgroundId (a shared link),
-  // fetch that record and populate the editors + preview from it.
+  // fetch that record and populate the editors, theory panel and preview
+  // from it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally runs once, on mount only.
   useEffect(() => {
     const id = searchParams.get("playgroundId");
@@ -233,6 +236,7 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
               css: data?.css ?? DEFAULT_FILES.css,
               js: data?.js ?? DEFAULT_FILES.js,
             },
+            theory: data?.theory ?? "",
             playgroundId: id,
           },
         });
@@ -257,8 +261,8 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "SET_PENDING_ACTION", action: "save" });
     dispatch({ type: "SET_ACTION_ERROR", message: null });
     try {
-      const { projectName, files } = stateRef.current;
-      const record = await createPlaygroundUrl({ projectName, ...files });
+      const { projectName, files, theory } = stateRef.current;
+      const record = await createPlaygroundUrl({ projectName, ...files, theory });
       dispatch({ type: "SET_PLAYGROUND_ID", id: record.id });
       setQueryPlaygroundId(record.id);
       dispatch({ type: "SET_NOTICE", message: "Saved" });
@@ -272,13 +276,13 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
   }
 
   async function share() {
-    const { playgroundId, projectName, files } = stateRef.current;
+    const { playgroundId, projectName, files, theory } = stateRef.current;
     if (!playgroundId) return false;
 
     dispatch({ type: "SET_PENDING_ACTION", action: "share" });
     dispatch({ type: "SET_ACTION_ERROR", message: null });
     try {
-      const record = await updatePlaygroundUrl(playgroundId, { projectName, ...files });
+      const record = await updatePlaygroundUrl(playgroundId, { projectName, ...files, theory });
       const url = record.shareable_url;
 
       if (typeof navigator !== "undefined" && navigator.share) {
