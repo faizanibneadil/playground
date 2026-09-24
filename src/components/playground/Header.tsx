@@ -1,6 +1,7 @@
 "use client";
 
-import { Pause, Play, RotateCcw } from "lucide-react";
+import { Loader2, Pause, Play, RotateCcw, Save, Share2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +18,6 @@ import { usePlayground } from "@/context/playground-context";
 import { ProjectNameField } from "./ProjectNameField";
 import { ThemeToggle } from "./ThemeToggle";
 import { ViewTabs } from "./ViewTabs";
-import { useState } from "react";
 
 /** Replaces the old separate "Run" button + auto-run checkbox with a
  * single play/pause toggle. Playing = the preview keeps re-running as
@@ -48,9 +48,51 @@ function AutoRunToggle() {
   );
 }
 
+function SaveButton() {
+  const { state, actions } = usePlayground();
+  const isSaving = state.pendingAction === "save";
+
+  return (
+    <Button
+      size="icon"
+      variant="secondary"
+      onClick={() => void actions.save()}
+      disabled={isSaving}
+      title="Save this playground"
+      aria-label="Save this playground"
+    >
+      {isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+    </Button>
+  );
+}
+
+function ShareButton() {
+  const { state, actions } = usePlayground();
+  const isSharing = state.pendingAction === "share";
+
+  return (
+    <Button
+      size="icon"
+      variant="secondary"
+      onClick={() => void actions.share()}
+      disabled={isSharing}
+      title="Share this playground"
+      aria-label="Share this playground"
+    >
+      {isSharing ? <Loader2 className="size-3.5 animate-spin" /> : <Share2 className="size-3.5" />}
+    </Button>
+  );
+}
+
 function ResetButton() {
-  const { actions } = usePlayground();
+  const { state, actions } = usePlayground();
   const [open, setOpen] = useState(false);
+  const isResetting = state.pendingAction === "reset";
+
+  async function handleReset() {
+    const ok = await actions.reset();
+    if (ok) setOpen(false);
+  }
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
@@ -69,15 +111,17 @@ function ResetButton() {
             can&apos;t be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {state.actionError && <p className="text-xs text-destructive">{state.actionError}</p>}
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={isResetting}>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            onClick={() => {
-              actions.reset();
-              setOpen(false);
+            onClick={(e) => {
+              e.preventDefault();
+              void handleReset();
             }}
+            disabled={isResetting}
           >
-            Reset
+            {isResetting ? "Resetting…" : "Reset"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -85,10 +129,26 @@ function ResetButton() {
   );
 }
 
+/** Save/Share errors get a plain alert — no new UI chrome added to the
+ * header for this. */
+function useActionErrorAlert() {
+  const { state } = usePlayground();
+  const lastShown = useRef<string | null>(null);
+  useEffect(() => {
+    if (state.actionError && state.actionError !== lastShown.current) {
+      lastShown.current = state.actionError;
+      window.alert(state.actionError);
+    }
+  }, [state.actionError]);
+}
+
 /** Same 3-section header on every device now: Theory/Practical tabs on
  * the left, the editable project name in the center, and play/pause +
  * reset + theme toggle on the right. No more mobile options drawer. */
 export function Header() {
+  const { state } = usePlayground();
+  useActionErrorAlert();
+
   return (
     <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-panel px-2 sm:px-3">
       <div className="flex min-w-0 flex-1 items-center">
@@ -100,6 +160,7 @@ export function Header() {
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-1.5">
+        {state.playgroundId ? <ShareButton /> : <SaveButton />}
         <AutoRunToggle />
         <ResetButton />
         <ThemeToggle />
