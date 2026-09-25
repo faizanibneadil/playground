@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Pause, Play, RotateCcw, Save, Share2 } from "lucide-react";
+import { Loader2, RotateCcw, Save, Share2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
@@ -19,46 +19,18 @@ import { ProjectNameField } from "./ProjectNameField";
 import { ThemeToggle } from "./ThemeToggle";
 import { ViewTabs } from "./ViewTabs";
 
-/** Replaces the old separate "Run" button + auto-run checkbox with a
- * single play/pause toggle. Playing = the preview keeps re-running as
- * you type (the previous default behaviour); pausing stops that until
- * you resume, at which point it also runs once immediately. */
-function AutoRunToggle() {
-  const { state, actions } = usePlayground();
-  const isPlaying = state.autoRun;
-
-  return (
-    <Button
-      size="icon"
-      className="text-white"
-      onClick={() => {
-        const next = !isPlaying;
-        actions.setAutoRun(next);
-        if (next) actions.run();
-      }}
-      title={isPlaying ? "Pause auto-run" : "Resume auto-run"}
-      aria-label={isPlaying ? "Pause auto-run" : "Resume auto-run"}
-    >
-      {isPlaying ? (
-        <Pause className="size-3.5 fill-current" />
-      ) : (
-        <Play className="size-3.5 fill-current " />
-      )}
-    </Button>
-  );
-}
-
 function SaveButton() {
   const { state, actions } = usePlayground();
   const isSaving = state.pendingAction === "save";
+  const disabled = !state.playgroundId || isSaving;
 
   return (
     <Button
       size="icon"
       variant="secondary"
       onClick={() => void actions.save()}
-      disabled={isSaving}
-      title="Save this playground"
+      disabled={disabled}
+      title={state.playgroundId ? "Save this playground" : "Click Run in the preview first"}
       aria-label="Save this playground"
     >
       {isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
@@ -107,8 +79,9 @@ function ResetButton() {
         <AlertDialogHeader>
           <AlertDialogTitle>Reset this playground?</AlertDialogTitle>
           <AlertDialogDescription>
-            Your HTML, CSS and JS will be replaced with the starter template. This
-            can&apos;t be undone.
+            Your HTML, CSS and JS will be replaced with the starter template
+            {state.playgroundId ? " and the shared link for this playground will stop working" : ""}
+            . This can&apos;t be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {state.actionError && <p className="text-xs text-destructive">{state.actionError}</p>}
@@ -129,8 +102,8 @@ function ResetButton() {
   );
 }
 
-/** Save/Share errors get a plain alert — no new UI chrome added to the
- * header for this. */
+/** Save/Share/Reset errors get a plain alert — no new UI chrome added to
+ * the header for this. */
 function useActionErrorAlert() {
   const { state } = usePlayground();
   const lastShown = useRef<string | null>(null);
@@ -142,9 +115,6 @@ function useActionErrorAlert() {
   }, [state.actionError]);
 }
 
-/** Same 3-section header on every device now: Theory/Practical tabs on
- * the left, the editable project name in the center, and play/pause +
- * reset + theme toggle on the right. No more mobile options drawer. */
 export function Header() {
   const { state } = usePlayground();
   useActionErrorAlert();
@@ -160,8 +130,8 @@ export function Header() {
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-1.5">
-        {state.playgroundId ? <ShareButton /> : <SaveButton />}
-        <AutoRunToggle />
+        <SaveButton />
+        {state.canShare && <ShareButton />}
         <ResetButton />
         <ThemeToggle />
       </div>
