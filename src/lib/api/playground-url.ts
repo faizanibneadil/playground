@@ -25,12 +25,45 @@ export interface UrlRecord {
 
 export class PlaygroundApiError extends Error {}
 
-function playgroundLongURL(id: string): string {
-  return `${SITE_URL}/?playgroundId=${id}`;
-}
-
 function buildUrlState(data: PlaygroundStateData): PlaygroundUrlState {
   return { type: "playground", version: 1, data };
+}
+
+/** The value Save writes into longURL, and what Share's visibility is
+ * checked against. Kept as one helper so the write side and the read
+ * side can't drift apart. */
+function shareableLongURL(shortURL: string): string {
+  const url = new URL(SITE_URL);
+  url.searchParams.set("shortURL", shortURL);
+  return url.toString();
+}
+
+/** True once longURL has actually been patched to embed this record's
+ * own shortURL — false right after creation (longURL is still the bare
+ * site URL then), true after the first Save. */
+export function longUrlMatchesShortUrl(record: UrlRecord): boolean {
+  try {
+    return new URL(record.longURL).searchParams.get("shortURL") === record.shortURL;
+  } catch {
+    return false;
+  }
+}
+
+async function parseJson(res: Response): Promise<unknown> {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function extractErrorMessage(body: unknown, status: number): string {
+  const errors = (body as { errors?: { message?: string }[] } | null)?.errors;
+  return (
+    errors?.[0]?.message ??
+    (body as { message?: string } | null)?.message ??
+    `Request failed (${status})`
+  );
 }
 
 async function request(path: string, init?: RequestInit): Promise<UrlRecord> {
@@ -38,31 +71,20 @@ async function request(path: string, init?: RequestInit): Promise<UrlRecord> {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
   });
-
-  let body: unknown = null;
-  try {
-    body = await res.json();
-  } catch {
-    // A bare 204/empty response has no JSON body — that's fine.
-  }
+  const body = await parseJson(res);
 
   if (!res.ok) {
-    const errors = (body as { errors?: { message?: string }[] } | null)?.errors;
-    const message =
-      errors?.[0]?.message ??
-      (body as { message?: string } | null)?.message ??
-      `Request failed (${res.status})`;
-    throw new PlaygroundApiError(message);
+    throw new PlaygroundApiError(extractErrorMessage(body, res.status));
   }
 
   // Payload wraps create/update/delete responses as { message, doc };
   // find-by-id returns the document directly. Handle both.
-  const doc = (body as { doc?: UrlRecord } | null)?.doc ?? (body as UrlRecord);
-  return doc;
+  return (body as { doc?: UrlRecord } | null)?.doc ?? (body as UrlRecord);
 }
 
-/** Creates a fresh record. longURL is a placeholder here — Share fills in
- * the real value once the id exists (see updatePlaygroundUrl below). */
+/** Creates a fresh record. longURL is left as the bare site URL —
+ * intentionally does NOT embed shortURL yet, so Share stays locked
+ * until an explicit Save. */
 export async function createPlaygroundUrl(data: PlaygroundStateData): Promise<UrlRecord> {
   return request("/urls", {
     method: "POST",
@@ -70,21 +92,38 @@ export async function createPlaygroundUrl(data: PlaygroundStateData): Promise<Ur
   });
 }
 
-/** Updates the same record's code + theory and points longURL at this
- * playground's own share URL. Called every time Share is clicked
- * (idempotent). */
+/** Persists the latest code/theory/name and fixes longURL so it embeds
+ * shortURL — this is what unlocks Share. */
 export async function updatePlaygroundUrl(
   id: string,
   data: PlaygroundStateData,
+  shortURL: string,
 ): Promise<UrlRecord> {
   return request(`/urls/${id}`, {
     method: "PATCH",
-    body: JSON.stringify({ longURL: playgroundLongURL(id), urlState: buildUrlState(data) }),
+    body: JSON.stringify({ longURL: shareableLongURL(shortURL), urlState: buildUrlState(data) }),
   });
 }
 
-export async function getPlaygroundUrl(id: string): Promise<UrlRecord> {
+export async function getPlaygroundUrlById(id: string): Promise<UrlRecord> {
   return request(`/urls/${id}`);
+}
+
+/** Used when a visitor arrives via the public share link and only has a
+ * shortURL, not the internal id — looks the record up by its unique
+ * shortURL field. Payload's list endpoint has a different response
+ * shape ({ docs: [...] }), so this doesn't go through request(). */
+export async function findPlaygroundUrlByShortURL(shortURL: string): Promise<UrlRecord | null> {
+  const query = `where[shortURL][equals]=${encodeURIComponent(shortURL)}&limit=1`;
+  const res = await fetch(`${API_BASE}/urls?${query}`);
+  const body = await parseJson(res);
+
+  if (!res.ok) {
+    throw new PlaygroundApiError(extractErrorMessage(body, res.status));
+  }
+
+  const docs = (body as { docs?: UrlRecord[] } | null)?.docs ?? [];
+  return docs[0] ?? null;
 }
 
 export async function deletePlaygroundUrl(id: string): Promise<void> {

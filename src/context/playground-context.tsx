@@ -13,16 +13,19 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   createPlaygroundUrl,
   deletePlaygroundUrl,
-  getPlaygroundUrl,
+  findPlaygroundUrlByShortURL,
+  getPlaygroundUrlById,
+  longUrlMatchesShortUrl,
   PlaygroundApiError,
   updatePlaygroundUrl,
+  type UrlRecord,
 } from "@/lib/api/playground-url";
 import { DEFAULT_FILES } from "@/lib/default-code";
 import { DEFAULT_PROJECT_NAME, sanitizeProjectNameInput } from "@/lib/slugify";
 
 export type FileKey = "html" | "css" | "js";
 export type MainView = "practical" | "theory";
-export type PendingAction = "save" | "share" | "reset" | null;
+export type PendingAction = "create" | "save" | "share" | "reset" | "load" | null;
 
 export interface ConsoleLogEntry {
   id: string;
@@ -41,7 +44,7 @@ interface HydratePayload {
   projectName: string;
   files: PlaygroundFiles;
   theory: string;
-  playgroundId: string;
+  record: UrlRecord;
 }
 
 interface PlaygroundState {
@@ -50,13 +53,18 @@ interface PlaygroundState {
   theory: string;
   activeFile: FileKey;
   mainView: MainView;
-  autoRun: boolean;
   logs: ConsoleLogEntry[];
   runVersion: number;
-  /** Set once this playground has been Saved or Shared, and mirrored in
-   * the URL as ?playgroundId=. Its presence is what switches the header
-   * from showing Save to showing Share. */
+  /** Payload's internal document id — set once the preview's Run button
+   * has created a record, mirrored in the URL as ?playgroundId=. */
   playgroundId: string | null;
+  /** The record's shortURL field — mirrored in the URL as ?shortURL=,
+   * and what Share's visibility is checked against. */
+  shortURL: string | null;
+  shareableUrl: string | null;
+  /** True once longURL is confirmed to embed this record's own
+   * shortURL — only then does Share appear. */
+  canShare: boolean;
   pendingAction: PendingAction;
   actionError: string | null;
   notice: string | null;
@@ -68,13 +76,12 @@ type Action =
   | { type: "SET_THEORY"; content: string }
   | { type: "SET_ACTIVE_FILE"; file: FileKey }
   | { type: "SET_MAIN_VIEW"; view: MainView }
-  | { type: "SET_AUTORUN"; value: boolean }
   | { type: "RESET_LOCAL" }
   | { type: "RUN" }
   | { type: "ADD_LOG"; entry: Omit<ConsoleLogEntry, "id"> }
   | { type: "CLEAR_LOGS" }
   | { type: "HYDRATE"; payload: HydratePayload }
-  | { type: "SET_PLAYGROUND_ID"; id: string | null }
+  | { type: "SET_RECORD_META"; record: UrlRecord }
   | { type: "SET_PENDING_ACTION"; action: PendingAction }
   | { type: "SET_ACTION_ERROR"; message: string | null }
   | { type: "SET_NOTICE"; message: string | null };
@@ -85,10 +92,12 @@ const initialState: PlaygroundState = {
   theory: "",
   activeFile: "html",
   mainView: "practical",
-  autoRun: true,
   logs: [],
   runVersion: 0,
   playgroundId: null,
+  shortURL: null,
+  shareableUrl: null,
+  canShare: false,
   pendingAction: null,
   actionError: null,
   notice: null,
@@ -111,8 +120,6 @@ function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundSt
       return { ...state, activeFile: action.file };
     case "SET_MAIN_VIEW":
       return { ...state, mainView: action.view };
-    case "SET_AUTORUN":
-      return { ...state, autoRun: action.value };
     case "RESET_LOCAL":
       // Fully fresh playground: new code, new name, no linked record.
       return {
@@ -122,6 +129,9 @@ function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundSt
         theory: "",
         activeFile: "html",
         playgroundId: null,
+        shortURL: null,
+        shareableUrl: null,
+        canShare: false,
         actionError: null,
         notice: null,
         runVersion: state.runVersion + 1,
@@ -144,11 +154,20 @@ function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundSt
         projectName: action.payload.projectName,
         files: action.payload.files,
         theory: action.payload.theory,
-        playgroundId: action.payload.playgroundId,
+        playgroundId: action.payload.record.id,
+        shortURL: action.payload.record.shortURL,
+        shareableUrl: action.payload.record.shareable_url,
+        canShare: longUrlMatchesShortUrl(action.payload.record),
         runVersion: state.runVersion + 1,
       };
-    case "SET_PLAYGROUND_ID":
-      return { ...state, playgroundId: action.id };
+    case "SET_RECORD_META":
+      return {
+        ...state,
+        playgroundId: action.record.id,
+        shortURL: action.record.shortURL,
+        shareableUrl: action.record.shareable_url,
+        canShare: longUrlMatchesShortUrl(action.record),
+      };
     case "SET_PENDING_ACTION":
       return { ...state, pendingAction: action.action };
     case "SET_ACTION_ERROR":
@@ -166,14 +185,18 @@ interface PlaygroundActions {
   setTheory: (content: string) => void;
   setActiveFile: (file: FileKey) => void;
   setMainView: (view: MainView) => void;
-  setAutoRun: (value: boolean) => void;
-  run: () => void;
   addLog: (entry: Omit<ConsoleLogEntry, "id">) => void;
   clearLogs: () => void;
-  /** Creates the record on first save. Returns true on success. */
+  /** The preview's refresh button. Always re-renders the preview
+   * locally; the very first call for a given playground also silently
+   * creates the backing record. Every call after that is purely local —
+   * no network call. */
+  refresh: () => Promise<void>;
+  /** Persists the current code/theory/name and fixes longURL so Share
+   * unlocks. Disabled in the UI until refresh() has created a record. */
   save: () => Promise<boolean>;
-  /** Updates the record's code/theory + longURL, then opens the native
-   * share sheet (falls back to clipboard copy). Returns true on success. */
+  /** Opens the native share sheet and copies the link to the clipboard.
+   * Doesn't touch longURL or the stored code. */
   share: () => Promise<boolean>;
   /** Deletes the linked record (if any) and returns to a fresh, unsaved
    * playground. Returns true on success — false leaves everything
@@ -201,31 +224,53 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
 
   // Keep the latest state available to async actions without making them
-  // stale-closure-prone or forcing them into the dependency arrays below.
+  // stale-closure-prone or forcing them into dependency arrays.
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  function setQueryPlaygroundId(id: string | null) {
+  function setRecordQueryParams(id: string, shortURL: string) {
     const params = new URLSearchParams(searchParams.toString());
-    if (id) params.set("playgroundId", id);
-    else params.delete("playgroundId");
+    params.set("playgroundId", id);
+    params.set("shortURL", shortURL);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  function clearRecordQueryParams() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("playgroundId");
+    params.delete("shortURL");
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
 
-  // On mount: if the URL already carries a playgroundId (a shared link),
-  // fetch that record and populate the editors, theory panel and preview
-  // from it.
+  function applyRecordMeta(record: UrlRecord) {
+    dispatch({ type: "SET_RECORD_META", record });
+    setRecordQueryParams(record.id, record.shortURL);
+  }
+
+  // On mount: figure out which kind of link this is — this playground's
+  // own reload (?playgroundId=) vs a visitor arriving via someone's
+  // shared link (?shortURL= only) — and hydrate accordingly.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally runs once, on mount only.
   useEffect(() => {
-    const id = searchParams.get("playgroundId");
-    if (!id) {
+    const idParam = searchParams.get("playgroundId");
+    const shortParam = searchParams.get("shortURL");
+
+    if (!idParam && !shortParam) {
       dispatch({ type: "RUN" });
       return;
     }
-    dispatch({ type: "SET_PENDING_ACTION", action: "share" });
-    getPlaygroundUrl(id)
+
+    dispatch({ type: "SET_PENDING_ACTION", action: "load" });
+    const lookup = idParam
+      ? getPlaygroundUrlById(idParam)
+      : findPlaygroundUrlByShortURL(shortParam as string);
+
+    lookup
       .then((record) => {
+        if (!record) {
+          throw new PlaygroundApiError("This playground link no longer exists.");
+        }
         const data = record.urlState?.data;
         dispatch({
           type: "HYDRATE",
@@ -237,13 +282,16 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
               js: data?.js ?? DEFAULT_FILES.js,
             },
             theory: data?.theory ?? "",
-            playgroundId: id,
+            record,
           },
         });
+        // Normalizes a visitor's ?shortURL=-only link to the same
+        // ?playgroundId=&shortURL= shape this playground's own URL uses.
+        setRecordQueryParams(record.id, record.shortURL);
       })
       .catch((err) => {
         dispatch({ type: "SET_ACTION_ERROR", message: errorMessage(err) });
-        setQueryPlaygroundId(null);
+        clearRecordQueryParams();
         dispatch({ type: "RUN" });
       })
       .finally(() => dispatch({ type: "SET_PENDING_ACTION", action: null }));
@@ -257,14 +305,36 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [state.notice]);
 
-  async function save() {
-    dispatch({ type: "SET_PENDING_ACTION", action: "save" });
+  async function refresh() {
+    dispatch({ type: "RUN" });
+    if (stateRef.current.playgroundId) return; // already created — purely local from here on
+
+    dispatch({ type: "SET_PENDING_ACTION", action: "create" });
     dispatch({ type: "SET_ACTION_ERROR", message: null });
     try {
       const { projectName, files, theory } = stateRef.current;
       const record = await createPlaygroundUrl({ projectName, ...files, theory });
-      dispatch({ type: "SET_PLAYGROUND_ID", id: record.id });
-      setQueryPlaygroundId(record.id);
+      applyRecordMeta(record);
+    } catch (err) {
+      dispatch({ type: "SET_ACTION_ERROR", message: errorMessage(err) });
+    } finally {
+      dispatch({ type: "SET_PENDING_ACTION", action: null });
+    }
+  }
+
+  async function save() {
+    const { playgroundId, shortURL, projectName, files, theory } = stateRef.current;
+    if (!playgroundId || !shortURL) return false;
+
+    dispatch({ type: "SET_PENDING_ACTION", action: "save" });
+    dispatch({ type: "SET_ACTION_ERROR", message: null });
+    try {
+      const record = await updatePlaygroundUrl(
+        playgroundId,
+        { projectName, ...files, theory },
+        shortURL,
+      );
+      applyRecordMeta(record);
       dispatch({ type: "SET_NOTICE", message: "Saved" });
       return true;
     } catch (err) {
@@ -276,23 +346,21 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
   }
 
   async function share() {
-    const { playgroundId, projectName, files, theory } = stateRef.current;
-    if (!playgroundId) return false;
+    const { shareableUrl, projectName } = stateRef.current;
+    if (!shareableUrl) return false;
 
     dispatch({ type: "SET_PENDING_ACTION", action: "share" });
     dispatch({ type: "SET_ACTION_ERROR", message: null });
     try {
-      const record = await updatePlaygroundUrl(playgroundId, { projectName, ...files, theory });
-      const url = record.shareable_url;
-
       if (typeof navigator !== "undefined" && navigator.share) {
         try {
-          await navigator.share({ title: projectName, url });
+          await navigator.share({ title: projectName, url: shareableUrl });
         } catch {
           // User cancelled the native share sheet — not an error.
         }
-      } else if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
+      }
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(shareableUrl);
         dispatch({ type: "SET_NOTICE", message: "Link copied to clipboard" });
       }
       return true;
@@ -311,8 +379,8 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     try {
       if (playgroundId) {
         await deletePlaygroundUrl(playgroundId);
-        setQueryPlaygroundId(null);
       }
+      clearRecordQueryParams();
       dispatch({ type: "RESET_LOCAL" });
       return true;
     } catch (err) {
@@ -331,10 +399,9 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     setTheory: (content) => dispatch({ type: "SET_THEORY", content }),
     setActiveFile: (file) => dispatch({ type: "SET_ACTIVE_FILE", file }),
     setMainView: (view) => dispatch({ type: "SET_MAIN_VIEW", view }),
-    setAutoRun: (value) => dispatch({ type: "SET_AUTORUN", value }),
-    run: () => dispatch({ type: "RUN" }),
     addLog: (entry) => dispatch({ type: "ADD_LOG", entry }),
     clearLogs: () => dispatch({ type: "CLEAR_LOGS" }),
+    refresh,
     save,
     share,
     reset,

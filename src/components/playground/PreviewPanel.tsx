@@ -1,20 +1,17 @@
 "use client";
 
-import { RotateCw } from "lucide-react";
+import { Loader2, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { usePlayground } from "@/context/playground-context";
 import { buildPreviewDocument } from "@/lib/preview-document";
 
-const REFRESH_DEBOUNCE_MS = 400;
-
 export function PreviewPanel() {
   const { state, actions } = usePlayground();
-  const { files, runVersion, autoRun } = state;
+  const { files, runVersion, pendingAction } = state;
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [srcDoc, setSrcDoc] = useState("");
-  const [lastRunAt, setLastRunAt] = useState<Date | null>(null);
 
   // Keep the latest files available to the runVersion-triggered effect
   // below without adding `files` to its dependency array.
@@ -26,21 +23,11 @@ export function PreviewPanel() {
     setSrcDoc(
       buildPreviewDocument(filesRef.current.html, filesRef.current.css, filesRef.current.js),
     );
-    setLastRunAt(new Date());
   }
 
-  // Auto-run: while playing, re-run a moment after typing stops. While
-  // paused, file edits are silently ignored here.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshPreview reads filesRef/actions freshly and doesn't need to be a dependency.
-  useEffect(() => {
-    if (!autoRun) return;
-    const timer = setTimeout(refreshPreview, REFRESH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files.html, files.css, files.js, autoRun]);
-
-  // Explicit runs: initial mount, Reset, and resuming from pause all bump
-  // runVersion and should refresh immediately, regardless of autoRun.
+  // Explicit runs only — initial mount/hydration, Reset, and this panel's
+  // own Run button all bump runVersion. There's no auto-run: typing alone
+  // never touches the preview.
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshPreview reads filesRef/actions freshly and doesn't need to be a dependency.
   useEffect(() => {
     refreshPreview();
@@ -66,26 +53,27 @@ export function PreviewPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const isCreating = pendingAction === "create";
+
   return (
     <div className="flex h-full flex-col bg-panel">
       <div className="flex h-8 shrink-0 items-center justify-between border-b border-border bg-panel px-3">
         <span className="text-[11px] font-medium text-muted-foreground">Preview</span>
-        <div className="flex items-center gap-2">
-          {lastRunAt && (
-            <span className="text-[10px] text-muted-foreground">
-              updated {lastRunAt.toLocaleTimeString()}
-            </span>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-5 w-5"
-            title="Refresh preview"
-            onClick={refreshPreview}
-          >
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5"
+          title="Run"
+          aria-label="Run"
+          disabled={isCreating}
+          onClick={() => void actions.refresh()}
+        >
+          {isCreating ? (
+            <Loader2 className="size-3 animate-spin" />
+          ) : (
             <RotateCw className="size-3" />
-          </Button>
-        </div>
+          )}
+        </Button>
       </div>
       <iframe
         ref={iframeRef}
