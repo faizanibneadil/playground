@@ -11,10 +11,11 @@ import { lowlight } from "@/lib/lowlight-instance";
 import { SmartCodeIndent } from "@/lib/tiptap/smart-code-indent";
 
 export function TheoryPanel() {
-  const { state, actions } = usePlayground();
+  const { state, actions, isReadOnly } = usePlayground();
 
   const editor = useEditor({
     immediatelyRender: false,
+    editable: !isReadOnly,
     extensions: [
       StarterKit.configure({
         codeBlock: false,
@@ -41,17 +42,19 @@ export function TheoryPanel() {
     },
   });
 
-  // `content` above only seeds the editor once, at creation — it doesn't
-  // react to state.theory changing afterwards (e.g. once a shared
-  // playground's saved theory arrives from the API). Sync it explicitly
-  // whenever the two drift apart; the equality check skips this while the
-  // user themself is typing, since editor.getHTML() already matches
-  // state.theory in that case.
+  // `content` and `editable` above only apply once, at creation — sync
+  // both explicitly whenever they drift from the current context state
+  // (e.g. once a shared playground's saved theory arrives from the API,
+  // or once isReadOnly is known).
   useEffect(() => {
     if (!editor) return;
     if (editor.getHTML() === state.theory) return;
     editor.commands.setContent(state.theory, { emitUpdate: false });
   }, [editor, state.theory]);
+
+  useEffect(() => {
+    editor?.setEditable(!isReadOnly);
+  }, [editor, isReadOnly]);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-editor">

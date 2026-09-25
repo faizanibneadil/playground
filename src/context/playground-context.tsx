@@ -55,15 +55,9 @@ interface PlaygroundState {
   mainView: MainView;
   logs: ConsoleLogEntry[];
   runVersion: number;
-  /** Payload's internal document id — set once the preview's Run button
-   * has created a record, mirrored in the URL as ?playgroundId=. */
   playgroundId: string | null;
-  /** The record's shortURL field — mirrored in the URL as ?shortURL=,
-   * and what Share's visibility is checked against. */
   shortURL: string | null;
   shareableUrl: string | null;
-  /** True once longURL is confirmed to embed this record's own
-   * shortURL — only then does Share appear. */
   canShare: boolean;
   pendingAction: PendingAction;
   actionError: string | null;
@@ -103,9 +97,6 @@ const initialState: PlaygroundState = {
   notice: null,
 };
 
-// A pure reducer: no fetches, no localStorage, no timers, no router calls.
-// Every side effect (API calls, URL changes) lives in the actions below,
-// which then dispatch plain state updates here.
 function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundState {
   switch (action.type) {
     case "SET_PROJECT_NAME": {
@@ -121,7 +112,6 @@ function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundSt
     case "SET_MAIN_VIEW":
       return { ...state, mainView: action.view };
     case "RESET_LOCAL":
-      // Fully fresh playground: new code, new name, no linked record.
       return {
         ...state,
         files: { ...DEFAULT_FILES },
@@ -187,26 +177,20 @@ interface PlaygroundActions {
   setMainView: (view: MainView) => void;
   addLog: (entry: Omit<ConsoleLogEntry, "id">) => void;
   clearLogs: () => void;
-  /** The preview's refresh button. Always re-renders the preview
-   * locally; the very first call for a given playground also silently
-   * creates the backing record. Every call after that is purely local —
-   * no network call. */
   refresh: () => Promise<void>;
-  /** Persists the current code/theory/name and fixes longURL so Share
-   * unlocks. Disabled in the UI until refresh() has created a record. */
   save: () => Promise<boolean>;
-  /** Opens the native share sheet and copies the link to the clipboard.
-   * Doesn't touch longURL or the stored code. */
   share: () => Promise<boolean>;
-  /** Deletes the linked record (if any) and returns to a fresh, unsaved
-   * playground. Returns true on success — false leaves everything
-   * untouched so the user can retry. */
   reset: () => Promise<boolean>;
 }
 
 interface PlaygroundContextValue {
   state: PlaygroundState;
   actions: PlaygroundActions;
+  /** True when this session only has read access (opened via a shared
+   * link's ?a=r). Theory becomes non-editable and Save/Reset disappear.
+   * Anything other than "r" (including no ?a= at all, e.g. a brand new
+   * playground) counts as write access. */
+  isReadOnly: boolean;
 }
 
 const PlaygroundContext = createContext<PlaygroundContextValue | null>(null);
@@ -223,8 +207,8 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Keep the latest state available to async actions without making them
-  // stale-closure-prone or forcing them into dependency arrays.
+  const isReadOnly = searchParams.get("a") === "r";
+
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -248,9 +232,6 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     setRecordQueryParams(record.id, record.shortURL);
   }
 
-  // On mount: figure out which kind of link this is — this playground's
-  // own reload (?playgroundId=) vs a visitor arriving via someone's
-  // shared link (?shortURL= only) — and hydrate accordingly.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally runs once, on mount only.
   useEffect(() => {
     const idParam = searchParams.get("playgroundId");
@@ -285,8 +266,6 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
             record,
           },
         });
-        // Normalizes a visitor's ?shortURL=-only link to the same
-        // ?playgroundId=&shortURL= shape this playground's own URL uses.
         setRecordQueryParams(record.id, record.shortURL);
       })
       .catch((err) => {
@@ -298,7 +277,6 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Transient notices/errors clear themselves after a few seconds.
   useEffect(() => {
     if (!state.notice) return;
     const timer = setTimeout(() => dispatch({ type: "SET_NOTICE", message: null }), 3000);
@@ -308,6 +286,7 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
   async function refresh() {
     dispatch({ type: "RUN" });
     if (stateRef.current.playgroundId) return; // already created — purely local from here on
+    if (isReadOnly) return; // never creates a record for a read-only viewer
 
     dispatch({ type: "SET_PENDING_ACTION", action: "create" });
     dispatch({ type: "SET_ACTION_ERROR", message: null });
@@ -323,6 +302,7 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
   }
 
   async function save() {
+    if (isReadOnly) return false;
     const { playgroundId, shortURL, projectName, files, theory } = stateRef.current;
     if (!playgroundId || !shortURL) return false;
 
@@ -373,6 +353,7 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
   }
 
   async function reset() {
+    if (isReadOnly) return false;
     const { playgroundId } = stateRef.current;
     dispatch({ type: "SET_PENDING_ACTION", action: "reset" });
     dispatch({ type: "SET_ACTION_ERROR", message: null });
@@ -384,8 +365,6 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "RESET_LOCAL" });
       return true;
     } catch (err) {
-      // Delete failed — leave the URL/state exactly as it was so nothing
-      // is lost, and let the user retry.
       dispatch({ type: "SET_ACTION_ERROR", message: errorMessage(err) });
       return false;
     } finally {
@@ -407,7 +386,9 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     reset,
   };
 
-  return <PlaygroundContext value={{ state, actions }}>{children}</PlaygroundContext>;
+  return (
+    <PlaygroundContext value={{ state, actions, isReadOnly }}>{children}</PlaygroundContext>
+  );
 }
 
 export function usePlayground() {

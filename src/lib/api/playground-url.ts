@@ -33,10 +33,11 @@ function buildUrlState(data: PlaygroundStateData): PlaygroundUrlState {
  * checked against. Kept as one helper so the write side and the read
  * side can't drift apart. */
 function shareableLongURL(shortURL: string): string {
-  const url = new URL(SITE_URL);
-  url.searchParams.set("shortURL", shortURL);
-  return url.toString();
-}
+    const url = new URL(SITE_URL);
+    url.searchParams.set("shortURL", shortURL);
+    url.searchParams.set("a", "r");
+    return url.toString();
+  }
 
 /** True once longURL has actually been patched to embed this record's
  * own shortURL — false right after creation (longURL is still the bare

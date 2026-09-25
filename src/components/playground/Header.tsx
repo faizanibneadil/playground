@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, RotateCcw, Save, Share2 } from "lucide-react";
+import { FilePlus, Loader2, RotateCcw, Save, Share2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
@@ -102,8 +102,26 @@ function ResetButton() {
   );
 }
 
-/** Save/Share/Reset errors get a plain alert — no new UI chrome added to
- * the header for this. */
+/** Shown only in read-only sessions — sends the viewer to a completely
+ * fresh playground of their own. Uses a hard navigation so every bit of
+ * local state resets, and the current origin so this works in dev too
+ * (not just on the production domain). */
+function NewPlaygroundButton() {
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      className="gap-1.5"
+      onClick={() => {
+        window.location.href = `${window.location.origin}${window.location.pathname}`;
+      }}
+    >
+      <FilePlus className="size-3.5" />
+      New Playground
+    </Button>
+  );
+}
+
 function useActionErrorAlert() {
   const { state } = usePlayground();
   const lastShown = useRef<string | null>(null);
@@ -116,7 +134,7 @@ function useActionErrorAlert() {
 }
 
 export function Header() {
-  const { state } = usePlayground();
+  const { state, isReadOnly } = usePlayground();
   useActionErrorAlert();
 
   return (
@@ -130,9 +148,10 @@ export function Header() {
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-1.5">
-        <SaveButton />
+        {isReadOnly && <NewPlaygroundButton />}
+        {!isReadOnly && <SaveButton />}
         {state.canShare && <ShareButton />}
-        <ResetButton />
+        {!isReadOnly && <ResetButton />}
         <ThemeToggle />
       </div>
     </header>
