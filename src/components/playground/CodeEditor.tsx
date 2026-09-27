@@ -1,18 +1,13 @@
 "use client";
 
-import { html } from "@codemirror/lang-html";
-import { javascript } from "@codemirror/lang-javascript";
-import { indentUnit } from "@codemirror/language";
-import { keymap } from "@codemirror/view";
-import { vscodeDark, vscodeLight } from "@uiw/codemirror-theme-vscode";
-import CodeMirror, { EditorView, type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
+import Editor, { type Monaco } from "@monaco-editor/react";
+import type { editor } from "monaco-editor";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { useTheme } from "@/context/theme-context";
-import { autocompleteTooltipTheme } from "@/lib/codemirror/autocomplete-theme";
-import { cssWithVscodeCompletion } from "@/lib/codemirror/css-property-completion";
-import { customFoldGutter } from "@/lib/codemirror/fold-gutter-icons";
-import { htmlTagSync } from "@/lib/codemirror/html-tag-sync";
 import { type EditorLanguage, formatCode } from "@/lib/format-code";
+import { registerAutoCloseTag } from "@/lib/monaco/auto-close-tag";
+import { applyMonacoTheme } from "@/lib/monaco/theme";
+import { registerTagRenameSync } from "@/lib/monaco/tag-rename-sync";
 
 export interface CodeEditorHandle {
   format: () => Promise<void>;
@@ -28,99 +23,119 @@ interface CodeEditorProps {
   className?: string;
 }
 
-function languageExtension(language: EditorLanguage) {
-  switch (language) {
-    case "html":
-      return html({ autoCloseTags: true, matchClosingTags: true });
-    case "css":
-      return cssWithVscodeCompletion();
-    case "javascript":
-      // Ships its own scope-aware completion source (keywords, snippets,
-      // and local variables), registered as this language's autocomplete
-      // data — no extra wiring needed for JS suggestions to show up.
-      return javascript({ jsx: false });
-  }
-}
-
 export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
   function CodeEditor({ language, value, onChange, lineWrap = true, className }, ref) {
-    const cmRef = useRef<ReactCodeMirrorRef | null>(null);
     const { theme } = useTheme();
+    const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+    const monacoRef = useRef<Monaco | null>(null);
+    const disposersRef = useRef<{ dispose: () => void }[]>([]);
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
 
-    // useImperativeHandle needs a genuinely stable callback identity to
-    // know when to rebuild the exposed handle — that's a correctness
-    // requirement of the hook itself, not a perf optimization, so this is
-    // one of the few spots we memoize by hand instead of leaning on the
-    // React Compiler.
+    // Same stable-callback requirement as before: useImperativeHandle needs
+    // a genuinely stable identity to know when to rebuild the handle.
     const format = useCallback(async () => {
-      const view = cmRef.current?.view;
-      if (!view) return;
+      const ed = editorRef.current;
+      const model = ed?.getModel();
+      if (!ed || !model) return;
       try {
-        const formatted = await formatCode(view.state.doc.toString(), language);
-        const cursor = view.state.selection.main.head;
-        view.dispatch({
-          changes: { from: 0, to: view.state.doc.length, insert: formatted },
-          selection: { anchor: Math.min(cursor, formatted.length) },
-        });
-        onChange(formatted);
+        const formatted = await formatCode(model.getValue(), language);
+        model.pushEditOperations(
+          [],
+          [{ range: model.getFullModelRange(), text: formatted }],
+          () => null,
+        );
+        onChangeRef.current(formatted);
       } catch {
         // Invalid syntax can't be formatted — leave the editor content as-is.
       }
-    }, [language, onChange]);
+    }, [language]);
 
     useImperativeHandle(
       ref,
       () => ({
         format,
         refresh: () => {
-          const view = cmRef.current?.view;
-          if (!view) return;
-          requestAnimationFrame(() => view.requestMeasure());
+          requestAnimationFrame(() => editorRef.current?.layout());
         },
-        focus: () => cmRef.current?.view?.focus(),
+        focus: () => editorRef.current?.focus(),
       }),
       [format],
     );
 
-    const extensions = [
-      languageExtension(language),
-      indentUnit.of("  "),
-      customFoldGutter(),
-      autocompleteTooltipTheme,
-      keymap.of([
-        {
-          key: "Shift-Alt-f",
-          mac: "Shift-Alt-f",
-          run: () => {
-            void format();
-            return true;
-          },
-        },
-      ]),
-    ];
-    if (lineWrap) extensions.push(EditorView.lineWrapping);
-    if (language === "html") extensions.push(htmlTagSync());
+    useEffect(() => {
+      if (!monacoRef.current) return;
+      applyMonacoTheme(monacoRef.current, theme);
+    }, [theme]);
+
+    useEffect(() => {
+      editorRef.current?.updateOptions({ wordWrap: lineWrap ? "on" : "off" });
+    }, [lineWrap]);
+
+    useEffect(() => {
+      return () => {
+        for (const d of disposersRef.current) d.dispose();
+        disposersRef.current = [];
+      };
+    }, []);
 
     return (
-      <CodeMirror
-        ref={cmRef}
+      <Editor
         className={className}
+        language={language}
         value={value}
-        height="100%"
-        theme={theme === "dark" ? vscodeDark : vscodeLight}
-        extensions={extensions}
-        basicSetup={{
-          lineNumbers: true,
-          foldGutter: false,
-          highlightActiveLine: true,
-          highlightActiveLineGutter: true,
-          bracketMatching: true,
-          closeBrackets: true,
-          autocompletion: true,
-          indentOnInput: true,
+        theme="app"
+        onChange={(v) => onChangeRef.current(v ?? "")}
+        options={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 13,
+          lineHeight: 21,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
           tabSize: 2,
+          insertSpaces: true,
+          wordWrap: lineWrap ? "on" : "off",
+          bracketPairColorization: { enabled: true },
+          renderLineHighlight: "all",
+          autoClosingBrackets: "always",
+          autoClosingQuotes: "always",
+          autoIndent: "full",
+          matchBrackets: "always",
+          quickSuggestions: { other: true, comments: false, strings: true },
+          suggestOnTriggerCharacters: true,
+          folding: true,
+          showFoldingControls: "mouseover",
         }}
-        onChange={onChange}
+        beforeMount={(monaco) => {
+          applyMonacoTheme(monaco, theme);
+          // DOM globals (document, console, ...) for JS suggestions/diagnostics.
+          monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+            target: monaco.languages.typescript.ScriptTarget.ES2020,
+            allowNonTsExtensions: true,
+            lib: ["es2020", "dom"],
+          });
+        }}
+        onMount={(editorInstance, monaco) => {
+          editorRef.current = editorInstance;
+          monacoRef.current = monaco;
+
+          // Re-registering this exact action id shadows Monaco's own
+          // (lesser) built-in formatter with our Prettier-backed one, on
+          // the same Shift+Alt+F shortcut it already owns.
+          editorInstance.addAction({
+            id: "editor.action.formatDocument",
+            label: "Format Document",
+            keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF],
+            run: () => {
+              void format();
+            },
+          });
+
+          if (language === "html") {
+            disposersRef.current.push(registerAutoCloseTag(editorInstance));
+            disposersRef.current.push(registerTagRenameSync(editorInstance));
+          }
+        }}
       />
     );
   },
