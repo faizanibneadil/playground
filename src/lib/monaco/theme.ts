@@ -1,20 +1,41 @@
 import type { Monaco } from "@monaco-editor/react";
 
-/** Resolves a CSS custom property (oklch, hex, whatever) to a concrete
- * rgb()/rgba() string — Monaco's theme colors need a literal value, not a
- * var() reference. Reads whatever is *currently* active on <html> (light
- * or dark), since both palettes share the same variable names. */
+/** Resolves a CSS custom property (oklch, lab, hex, whatever) to a
+ * Monaco-safe "#rrggbb" / "rgba(...)" string. getComputedStyle() — and
+ * even a canvas `fillStyle` round-trip — can still hand back a
+ * lab()/oklch() string on wide-gamut colors in newer Chrome, and Monaco's
+ * theme parser only understands hex/rgba. Actually *painting* the color
+ * onto a 1x1 canvas and reading the raw pixel bytes back via
+ * getImageData() always yields plain, clamped 0-255 sRGB numbers,
+ * regardless of the source color space. */
 function resolveCssVar(name: string): string {
   if (typeof document === "undefined") return "#1e1e1e";
+
   const probe = document.createElement("span");
   probe.style.color = `var(${name})`;
-  probe.style.position = "fixed";
-  probe.style.opacity = "0";
-  probe.style.pointerEvents = "none";
   document.body.appendChild(probe);
-  const resolved = getComputedStyle(probe).color;
+  const raw = getComputedStyle(probe).color;
   document.body.removeChild(probe);
-  return resolved || "#1e1e1e";
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return raw;
+
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = raw;
+    ctx.fillRect(0, 0, 1, 1);
+
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    const hex = (n: number) => n.toString(16).padStart(2, "0");
+    return a === 255
+      ? `#${hex(r)}${hex(g)}${hex(b)}`
+      : `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
+  } catch {
+    return raw;
+  }
 }
 
 /** Defines/redefines a single "app" Monaco theme from the app's current

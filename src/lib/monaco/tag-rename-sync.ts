@@ -1,6 +1,4 @@
-import type { editor } from "monaco-editor";
-
-const TAG_NAME_RE = /^[a-zA-Z][a-zA-Z0-9:_.-]*$/;
+import type { Monaco } from "@monaco-editor/react";
 
 interface ScannedTag {
   name: string;
@@ -47,53 +45,45 @@ function findMatch(tags: ScannedTag[], idx: number): ScannedTag | null {
   return null;
 }
 
-/** Mirrors VS Code's "linked editing" for HTML: renaming an opening tag
- * updates its matching closing tag automatically, and vice versa. A
- * regex/offset-based stand-in for the old CodeMirror version, which used
- * a Lezer syntax tree Monaco doesn't expose the same way. */
-export function registerTagRenameSync(editorInstance: editor.IStandaloneCodeEditor) {
-  let syncing = false;
+let disposable: { dispose: () => void } | null = null;
 
-  return editorInstance.onDidChangeModelContent((e) => {
-    if (syncing) return;
-    if (e.changes.length !== 1) return;
-    const change = e.changes[0];
-    if (change.text !== "" && !TAG_NAME_RE.test(change.text)) return;
+/** Registers Monaco's native "linked editing" provider for HTML — the
+ * same built-in mechanism (`editor.linkedEditing` option) VS Code uses for
+ * "Auto Rename Tag": editing an opening tag's name live-mirrors onto its
+ * matching closing tag, with the highlight box, cursor handling, and undo
+ * grouping all handled by Monaco itself. We only answer "which two ranges
+ * are linked right now" — a language-level registration, same
+ * dispose-and-replace pattern as the auto-close-tag provider. */
+export function registerTagRenameSync(monaco: Monaco, languageId: string) {
+  disposable?.dispose();
+  disposable = monaco.languages.registerLinkedEditingRangeProvider(languageId, {
+    provideLinkedEditingRanges(model:any, position:any) {
+      const text = model.getValue();
+      const offset = model.getOffsetAt(position);
+      const tags = scanTags(text);
 
-    const model = editorInstance.getModel();
-    const position = editorInstance.getPosition();
-    if (!model || !position) return;
+      const idx = tags.findIndex((t) => offset >= t.nameStart && offset <= t.nameEnd);
+      if (idx === -1) return null;
 
-    const text = model.getValue();
-    const offset = model.getOffsetAt(position);
-    const tags = scanTags(text);
+      const other = findMatch(tags, idx);
+      if (!other) return null;
 
-    const editedIdx = tags.findIndex((t) => offset >= t.nameStart && offset <= t.nameEnd);
-    if (editedIdx === -1) return;
-    const edited = tags[editedIdx];
-    const editedName = text.slice(edited.nameStart, edited.nameEnd);
+      const toRange = (t: ScannedTag) => {
+        const start = model.getPositionAt(t.nameStart);
+        const end = model.getPositionAt(t.nameEnd);
+        return {
+          startLineNumber: start.lineNumber,
+          startColumn: start.column,
+          endLineNumber: end.lineNumber,
+          endColumn: end.column,
+        };
+      };
 
-    const other = findMatch(tags, editedIdx);
-    if (!other || other.name === editedName) return;
-
-    const startPos = model.getPositionAt(other.nameStart);
-    const endPos = model.getPositionAt(other.nameEnd);
-
-    syncing = true;
-    try {
-      editorInstance.executeEdits("tagRenameSync", [
-        {
-          range: {
-            startLineNumber: startPos.lineNumber,
-            startColumn: startPos.column,
-            endLineNumber: endPos.lineNumber,
-            endColumn: endPos.column,
-          },
-          text: editedName,
-        },
-      ]);
-    } finally {
-      syncing = false;
-    }
+      return {
+        ranges: [toRange(tags[idx]), toRange(other)],
+        wordPattern: /[a-zA-Z0-9:_.-]+/,
+      };
+    },
   });
+  return disposable;
 }
