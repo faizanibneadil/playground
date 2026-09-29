@@ -22,7 +22,8 @@ import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 
 import "@/styles/globals.css";
-import { THEME_INIT_SCRIPT, ThemeProvider } from "@/context/theme-context";
+import { ThemeProvider } from "@/context/theme-context";
+import { THEME_INIT_SCRIPT } from "@/lib/theme-init-script";
 
 export const metadata: Metadata = {
   title: "Playground — HTML, CSS & JS",
@@ -38,11 +39,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* Sets the light/dark class before paint to avoid a theme flash. */}
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static,
-            build-time constant string (THEME_INIT_SCRIPT) — no user input
-            ever reaches this, and it must run before hydration to avoid a
-            flash of the wrong theme. */}
-        {/* <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} /> */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static build-time constant, no user input ever reaches it. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="antialiased h-full overflow-hidden" suppressHydrationWarning>
         <ThemeProvider>{children}</ThemeProvider>

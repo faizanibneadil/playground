@@ -8,6 +8,7 @@ import { type EditorLanguage, formatCode } from "@/lib/format-code";
 import { registerAutoCloseTag } from "@/lib/monaco/auto-close-tag";
 import { registerTagRenameSync } from "@/lib/monaco/tag-rename-sync";
 import { applyMonacoTheme } from "@/lib/monaco/theme";
+import { cn } from "@/lib/utils";
 
 export interface CodeEditorHandle {
   format: () => Promise<void>;
@@ -73,10 +74,17 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
 
     return (
       <Editor
-        className={className}
+        className={cn("h-full w-full", className)}
+        height="100%"
+        width="100%"
         language={language}
         value={value}
         theme="app"
+        loading={
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+            Loading editor…
+          </div>
+        }
         onChange={(v) => onChangeRef.current(v ?? "")}
         options={{
           fontFamily: "var(--font-mono)",
@@ -84,6 +92,11 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
           lineHeight: 21,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
+          // Follows its container via ResizeObserver: panel drags, tab
+          // show/hide, mobile pane switches and orientation changes all work.
+          automaticLayout: true,
+          // Suggest/hover widgets render on <body>, so panel overflow can't clip them.
+          fixedOverflowWidgets: true,
           tabSize: 2,
           insertSpaces: true,
           wordWrap: lineWrap ? "on" : "off",

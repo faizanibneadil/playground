@@ -80,7 +80,9 @@ function ResetButton() {
           <AlertDialogTitle>Reset this playground?</AlertDialogTitle>
           <AlertDialogDescription>
             Your HTML, CSS and JS will be replaced with the starter template
-            {state.playgroundId ? " and the shared link for this playground will stop working" : ""}
+            {state.playgroundId
+              ? " and the shared link for this playground will stop working"
+              : ""}
             . This can&apos;t be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -139,15 +141,19 @@ export function Header() {
 
   return (
     <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-panel px-2 sm:px-3">
-      <div className="flex min-w-0 flex-1 items-center">
+      {/* Theory/Practical switch. Desktop only — on mobile it moves into the
+          bottom bar's Theory/Editor/Preview/Console tabs (see
+          Playground.tsx's MobileView), so the header stays to just the
+          project name and the right-side tools there. */}
+      <div className="hidden min-w-0 flex-1 items-center md:flex">
         <ViewTabs />
       </div>
 
-      <div className="flex shrink-0 items-center justify-center">
+      <div className="flex min-w-0 flex-1 items-center md:flex-none md:shrink-0 md:justify-center">
         <ProjectNameField />
       </div>
 
-      <div className="flex flex-1 items-center justify-end gap-1.5">
+      <div className="flex shrink-0 items-center justify-end gap-1.5 md:flex-1">
         {isReadOnly && <NewPlaygroundButton />}
         {!isReadOnly && <SaveButton />}
         {state.canShare && <ShareButton />}

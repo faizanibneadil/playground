@@ -4,11 +4,14 @@ export const DEFAULT_HTML = `<!DOCTYPE html>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Preview</title>
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <h1>Hello, Playground</h1>
     <p>Edit the HTML, CSS and JS tabs on the left. The preview updates live.</p>
     <button id="btn">Click me</button>
+
+    <script src="script.js"></script>
   </body>
 </html>
 `;
