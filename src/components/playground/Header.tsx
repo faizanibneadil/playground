@@ -1,6 +1,6 @@
 "use client";
 
-import { FilePlus, Loader2, RotateCcw, Save, Share2 } from "lucide-react";
+import { FilePlus, Loader2, RotateCcw, Save, Share2, SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
@@ -17,7 +17,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { usePlayground } from "@/context/playground-context";
 import { ProjectNameField } from "./ProjectNameField";
 import { ThemeToggle } from "./ThemeToggle";
-import { ViewTabs } from "./ViewTabs";
 
 function SaveButton() {
   const { state, actions } = usePlayground();
@@ -27,13 +26,19 @@ function SaveButton() {
   return (
     <Button
       size="icon"
-      variant="secondary"
+      variant="ghost"
       onClick={() => void actions.save()}
       disabled={disabled}
-      title={state.playgroundId ? "Save this playground" : "Click Run in the preview first"}
+      title={
+        state.playgroundId ? "Save this playground" : "Click Run in the preview first"
+      }
       aria-label="Save this playground"
     >
-      {isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+      {isSaving ? (
+        <Loader2 className="size-3.5 animate-spin" />
+      ) : (
+        <Save className="size-3.5" />
+      )}
     </Button>
   );
 }
@@ -45,13 +50,17 @@ function ShareButton() {
   return (
     <Button
       size="icon"
-      variant="secondary"
+      variant="ghost"
       onClick={() => void actions.share()}
       disabled={isSharing}
       title="Share this playground"
       aria-label="Share this playground"
     >
-      {isSharing ? <Loader2 className="size-3.5 animate-spin" /> : <Share2 className="size-3.5" />}
+      {isSharing ? (
+        <Loader2 className="size-3.5 animate-spin" />
+      ) : (
+        <Share2 className="size-3.5" />
+      )}
     </Button>
   );
 }
@@ -69,7 +78,7 @@ function ResetButton() {
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger
-        className={buttonVariants({ variant: "secondary", size: "icon" })}
+        className={buttonVariants({ variant: "ghost", size: "icon" })}
         title="Reset playground"
         aria-label="Reset playground"
       >
@@ -79,14 +88,17 @@ function ResetButton() {
         <AlertDialogHeader>
           <AlertDialogTitle>Reset this playground?</AlertDialogTitle>
           <AlertDialogDescription>
-            Your HTML, CSS and JS will be replaced with the starter template
+            Your files, folders and theory notes will be replaced with the starter
+            template
             {state.playgroundId
               ? " and the shared link for this playground will stop working"
               : ""}
             . This can&apos;t be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {state.actionError && <p className="text-xs text-destructive">{state.actionError}</p>}
+        {state.actionError && (
+          <p className="text-xs text-destructive">{state.actionError}</p>
+        )}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isResetting}>Cancel</AlertDialogCancel>
           <AlertDialogAction
@@ -112,7 +124,7 @@ function NewPlaygroundButton() {
   return (
     <Button
       size="sm"
-      variant="secondary"
+      variant="ghost"
       className="gap-1.5"
       onClick={() => {
         window.location.href = `${window.location.origin}${window.location.pathname}`;
@@ -140,20 +152,22 @@ export function Header() {
   useActionErrorAlert();
 
   return (
-    <header className="flex h-12 items-center justify-between gap-2 border-b border-border bg-panel px-2 sm:px-3">
-      {/* Theory/Practical switch. Desktop only — on mobile it moves into the
-          bottom bar's Theory/Editor/Preview/Console tabs (see
-          Playground.tsx's MobileView), so the header stays to just the
-          project name and the right-side tools there. */}
-      <div className="hidden min-w-0 flex-1 items-center md:flex">
-        <ViewTabs />
+    <header className="grid h-9 shrink-0 grid-cols-[auto_1fr_auto] items-center gap-2 border-b border-border bg-panel px-2 md:grid-cols-[1fr_minmax(0,28rem)_1fr] sm:px-3">
+      {/* Left: app name, like the window icon + menu area of VS Code's title bar. */}
+      <div className="flex min-w-0 items-center gap-2">
+        <SquareTerminal className="size-4 shrink-0 text-primary" />
+        <h1 className="hidden truncate text-xs font-medium text-foreground md:block">
+          Playground
+        </h1>
       </div>
 
-      <div className="flex min-w-0 flex-1 items-center md:flex-none md:shrink-0 md:justify-center">
+      {/* Center: where VS Code puts its search box. Here it holds the project
+          name (the slug saved with the playground). */}
+      <div className="flex min-w-0 justify-center">
         <ProjectNameField />
       </div>
 
-      <div className="flex shrink-0 items-center justify-end gap-1.5 md:flex-1">
+      <div className="flex shrink-0 items-center justify-end gap-0.5">
         {isReadOnly && <NewPlaygroundButton />}
         {!isReadOnly && <SaveButton />}
         {state.canShare && <ShareButton />}

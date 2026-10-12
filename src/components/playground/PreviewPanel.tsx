@@ -24,7 +24,7 @@ interface ConsoleBridgeMessage {
 
 export function PreviewPanel() {
   const { state, actions } = usePlayground();
-  const { files, runVersion } = state;
+  const { nodes, runVersion } = state;
   const [autoRun, setAutoRun] = useState(true);
   const [preview, setPreview] = useState<PreviewState>({ srcDoc: "", version: 0 });
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -34,7 +34,7 @@ export function PreviewPanel() {
   const rebuildPreview = useEffectEvent(() => {
     actions.clearLogs();
     setPreview({
-      srcDoc: buildPreviewDocument(files.html, files.css, files.js),
+      srcDoc: buildPreviewDocument(nodes),
       version: runVersion,
     });
   });
@@ -43,17 +43,19 @@ export function PreviewPanel() {
     void actions.refresh();
   });
 
-  const handleConsoleMessage = useEffectEvent((event: MessageEvent<ConsoleBridgeMessage>) => {
-    if (event.source !== iframeRef.current?.contentWindow) return;
-    const data = event.data;
-    if (!data?.__playgroundConsole) return;
-    if (typeof data.level !== "string" || !LOG_LEVELS.has(data.level)) return;
-    actions.addLog({
-      level: data.level as ConsoleLogEntry["level"],
-      message: typeof data.message === "string" ? data.message : String(data.message),
-      timestamp: Date.now(),
-    });
-  });
+  const handleConsoleMessage = useEffectEvent(
+    (event: MessageEvent<ConsoleBridgeMessage>) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      const data = event.data;
+      if (!data?.__playgroundConsole) return;
+      if (typeof data.level !== "string" || !LOG_LEVELS.has(data.level)) return;
+      actions.addLog({
+        level: data.level as ConsoleLogEntry["level"],
+        message: typeof data.message === "string" ? data.message : String(data.message),
+        timestamp: Date.now(),
+      });
+    },
+  );
 
   // Rebuild whenever a run is requested (mount, hydration, Reset, Run, auto-run).
   // biome-ignore lint/correctness/useExhaustiveDependencies: runVersion is the trigger; rebuildPreview is an Effect Event.
@@ -62,7 +64,7 @@ export function PreviewPanel() {
   }, [runVersion]);
 
   // Debounced auto-run. The first render is skipped: the effect above already does the initial build.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: file contents are the triggers; requestRun is an Effect Event.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the file tree is the trigger; requestRun is an Effect Event.
   useEffect(() => {
     if (isFirstRun.current) {
       isFirstRun.current = false;
@@ -71,10 +73,11 @@ export function PreviewPanel() {
     if (!autoRun) return;
     const timer = setTimeout(requestRun, AUTO_RUN_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [files.html, files.css, files.js, autoRun]);
+  }, [nodes, autoRun]);
 
   useEffect(() => {
-    const listener = (event: MessageEvent<ConsoleBridgeMessage>) => handleConsoleMessage(event);
+    const listener = (event: MessageEvent<ConsoleBridgeMessage>) =>
+      handleConsoleMessage(event);
     window.addEventListener("message", listener);
     return () => window.removeEventListener("message", listener);
   }, []);
