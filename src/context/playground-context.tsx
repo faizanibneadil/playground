@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   createContext,
   type ReactNode,
@@ -8,7 +9,6 @@ import {
   useReducer,
   useRef,
 } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   createPlaygroundUrl,
@@ -17,14 +17,25 @@ import {
   getPlaygroundUrlById,
   longUrlMatchesShortUrl,
   PlaygroundApiError,
-  updatePlaygroundUrl,
   type UrlRecord,
+  updatePlaygroundUrl,
 } from "@/lib/api/playground-url";
-import { DEFAULT_FILES } from "@/lib/default-code";
+import { DEFAULT_INDEX_FILE_ID, DEFAULT_NODES } from "@/lib/default-code";
+import {
+  addNode,
+  createNodeId,
+  type FsNode,
+  findNode,
+  removeNode,
+  renameNode,
+  updateFileContent,
+  validateNodeName,
+} from "@/lib/file-tree";
+import { deserializeProject, serializeProject } from "@/lib/playground-data";
 import { DEFAULT_PROJECT_NAME, sanitizeProjectNameInput } from "@/lib/slugify";
 
-export type FileKey = "html" | "css" | "js";
-export type MainView = "practical" | "theory";
+/** Which view the primary sidebar shows; `null` means the sidebar is collapsed. */
+export type SidebarView = "files" | "theory" | null;
 export type PendingAction = "create" | "save" | "share" | "reset" | "load" | null;
 
 export interface ConsoleLogEntry {
@@ -34,25 +45,23 @@ export interface ConsoleLogEntry {
   timestamp: number;
 }
 
-interface PlaygroundFiles {
-  html: string;
-  css: string;
-  js: string;
-}
-
 interface HydratePayload {
   projectName: string;
-  files: PlaygroundFiles;
+  nodes: FsNode[];
   theory: string;
   record: UrlRecord;
 }
 
 interface PlaygroundState {
   projectName: string;
-  files: PlaygroundFiles;
+  /** Flat list of the project's files and folders (see lib/file-tree.ts). */
+  nodes: FsNode[];
   theory: string;
-  activeFile: FileKey;
-  mainView: MainView;
+  /** File shown in the editor, `null` when no file is open. */
+  activeFileId: string | null;
+  /** Open editor tabs, in tab order. */
+  openFileIds: string[];
+  sidebarView: SidebarView;
   logs: ConsoleLogEntry[];
   runVersion: number;
   playgroundId: string | null;
@@ -66,10 +75,14 @@ interface PlaygroundState {
 
 type Action =
   | { type: "SET_PROJECT_NAME"; name: string }
-  | { type: "SET_FILE"; file: FileKey; content: string }
+  | { type: "ADD_NODE"; node: FsNode }
+  | { type: "RENAME_NODE"; id: string; name: string }
+  | { type: "DELETE_NODE"; id: string }
+  | { type: "SET_FILE_CONTENT"; id: string; content: string }
   | { type: "SET_THEORY"; content: string }
-  | { type: "SET_ACTIVE_FILE"; file: FileKey }
-  | { type: "SET_MAIN_VIEW"; view: MainView }
+  | { type: "OPEN_FILE"; id: string }
+  | { type: "CLOSE_FILE"; id: string }
+  | { type: "SET_SIDEBAR_VIEW"; view: SidebarView }
   | { type: "RESET_LOCAL" }
   | { type: "RUN" }
   | { type: "ADD_LOG"; entry: Omit<ConsoleLogEntry, "id"> }
@@ -82,10 +95,11 @@ type Action =
 
 const initialState: PlaygroundState = {
   projectName: DEFAULT_PROJECT_NAME,
-  files: { ...DEFAULT_FILES },
+  nodes: DEFAULT_NODES,
   theory: "",
-  activeFile: "html",
-  mainView: "practical",
+  activeFileId: DEFAULT_INDEX_FILE_ID,
+  openFileIds: [DEFAULT_INDEX_FILE_ID],
+  sidebarView: "files",
   logs: [],
   runVersion: 0,
   playgroundId: null,
@@ -97,27 +111,111 @@ const initialState: PlaygroundState = {
   notice: null,
 };
 
+/** The file a freshly loaded project opens first: index.html, else the first file. */
+function pickInitialFile(nodes: readonly FsNode[]): string | null {
+  const rootFiles = nodes.filter(
+    (node) => node.type === "file" && node.parentId === null,
+  );
+  const index = rootFiles.find((node) => node.name === "index.html");
+  return (
+    (index ?? rootFiles[0] ?? nodes.find((node) => node.type === "file"))?.id ?? null
+  );
+}
+
+/** After the active tab goes away, activate the tab that took its place (the right
+ * neighbour, or the last tab when it was the final one). */
+function pickNeighbourTab(
+  openIds: readonly string[],
+  activeId: string,
+  removedIds: ReadonlySet<string>,
+): string | null {
+  const remaining = openIds.filter((id) => !removedIds.has(id));
+  const position = openIds
+    .slice(0, openIds.indexOf(activeId))
+    .filter((id) => !removedIds.has(id)).length;
+  return remaining[Math.min(position, remaining.length - 1)] ?? null;
+}
+
 function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundState {
   switch (action.type) {
     case "SET_PROJECT_NAME": {
       const clean = sanitizeProjectNameInput(action.name);
       return { ...state, projectName: clean || DEFAULT_PROJECT_NAME };
     }
-    case "SET_FILE":
-      return { ...state, files: { ...state.files, [action.file]: action.content } };
+    case "ADD_NODE": {
+      const { node } = action;
+      if (
+        node.parentId !== null &&
+        findNode(state.nodes, node.parentId)?.type !== "folder"
+      ) {
+        return state;
+      }
+      if (validateNodeName(state.nodes, node.parentId, node.name) !== null) return state;
+      const nodes = addNode(state.nodes, { ...node, name: node.name.trim() });
+      if (node.type === "folder") return { ...state, nodes };
+      return {
+        ...state,
+        nodes,
+        openFileIds: [...state.openFileIds, node.id],
+        activeFileId: node.id,
+      };
+    }
+    case "RENAME_NODE": {
+      const target = findNode(state.nodes, action.id);
+      if (!target) return state;
+      if (
+        validateNodeName(state.nodes, target.parentId, action.name, target.id) !== null
+      ) {
+        return state;
+      }
+      return { ...state, nodes: renameNode(state.nodes, action.id, action.name) };
+    }
+    case "DELETE_NODE": {
+      if (!findNode(state.nodes, action.id)) return state;
+      const { nodes, removedIds } = removeNode(state.nodes, action.id);
+      const openFileIds = state.openFileIds.filter((id) => !removedIds.has(id));
+      let activeFileId = state.activeFileId;
+      if (activeFileId !== null && removedIds.has(activeFileId)) {
+        activeFileId = pickNeighbourTab(state.openFileIds, activeFileId, removedIds);
+      }
+      return { ...state, nodes, openFileIds, activeFileId };
+    }
+    case "SET_FILE_CONTENT":
+      return {
+        ...state,
+        nodes: updateFileContent(state.nodes, action.id, action.content),
+      };
     case "SET_THEORY":
       return { ...state, theory: action.content };
-    case "SET_ACTIVE_FILE":
-      return { ...state, activeFile: action.file };
-    case "SET_MAIN_VIEW":
-      return { ...state, mainView: action.view };
+    case "OPEN_FILE": {
+      if (findNode(state.nodes, action.id)?.type !== "file") return state;
+      return {
+        ...state,
+        openFileIds: state.openFileIds.includes(action.id)
+          ? state.openFileIds
+          : [...state.openFileIds, action.id],
+        activeFileId: action.id,
+      };
+    }
+    case "CLOSE_FILE": {
+      if (!state.openFileIds.includes(action.id)) return state;
+      const openFileIds = state.openFileIds.filter((id) => id !== action.id);
+      const activeFileId =
+        state.activeFileId === action.id
+          ? pickNeighbourTab(state.openFileIds, action.id, new Set([action.id]))
+          : state.activeFileId;
+      return { ...state, openFileIds, activeFileId };
+    }
+    case "SET_SIDEBAR_VIEW":
+      return { ...state, sidebarView: action.view };
     case "RESET_LOCAL":
       return {
         ...state,
-        files: { ...DEFAULT_FILES },
+        nodes: DEFAULT_NODES,
         projectName: DEFAULT_PROJECT_NAME,
         theory: "",
-        activeFile: "html",
+        activeFileId: DEFAULT_INDEX_FILE_ID,
+        openFileIds: [DEFAULT_INDEX_FILE_ID],
         playgroundId: null,
         shortURL: null,
         shareableUrl: null,
@@ -133,16 +231,22 @@ function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundSt
         ...state,
         logs: [
           ...state.logs,
-          { ...action.entry, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` },
+          {
+            ...action.entry,
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          },
         ].slice(-300),
       };
     case "CLEAR_LOGS":
       return { ...state, logs: [] };
-    case "HYDRATE":
+    case "HYDRATE": {
+      const initialFileId = pickInitialFile(action.payload.nodes);
       return {
         ...state,
         projectName: action.payload.projectName,
-        files: action.payload.files,
+        nodes: action.payload.nodes,
+        activeFileId: initialFileId,
+        openFileIds: initialFileId ? [initialFileId] : [],
         theory: action.payload.theory,
         playgroundId: action.payload.record.id,
         shortURL: action.payload.record.shortURL,
@@ -150,6 +254,7 @@ function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundSt
         canShare: longUrlMatchesShortUrl(action.payload.record),
         runVersion: state.runVersion + 1,
       };
+    }
     case "SET_RECORD_META":
       return {
         ...state,
@@ -171,10 +276,15 @@ function playgroundReducer(state: PlaygroundState, action: Action): PlaygroundSt
 
 interface PlaygroundActions {
   setProjectName: (name: string) => void;
-  setFileContent: (file: FileKey, content: string) => void;
+  createFile: (parentId: string | null, name: string) => void;
+  createFolder: (parentId: string | null, name: string) => void;
+  renameNode: (id: string, name: string) => void;
+  deleteNode: (id: string) => void;
+  setFileContent: (id: string, content: string) => void;
   setTheory: (content: string) => void;
-  setActiveFile: (file: FileKey) => void;
-  setMainView: (view: MainView) => void;
+  openFile: (id: string) => void;
+  closeFile: (id: string) => void;
+  setSidebarView: (view: SidebarView) => void;
   addLog: (entry: Omit<ConsoleLogEntry, "id">) => void;
   clearLogs: () => void;
   refresh: () => Promise<void>;
@@ -252,20 +362,8 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
         if (!record) {
           throw new PlaygroundApiError("This playground link no longer exists.");
         }
-        const data = record.urlState?.data;
-        dispatch({
-          type: "HYDRATE",
-          payload: {
-            projectName: data?.projectName ?? DEFAULT_PROJECT_NAME,
-            files: {
-              html: data?.html ?? DEFAULT_FILES.html,
-              css: data?.css ?? DEFAULT_FILES.css,
-              js: data?.js ?? DEFAULT_FILES.js,
-            },
-            theory: data?.theory ?? "",
-            record,
-          },
-        });
+        const project = deserializeProject(record.urlState?.data);
+        dispatch({ type: "HYDRATE", payload: { ...project, record } });
         setRecordQueryParams(record.id, record.shortURL);
       })
       .catch((err) => {
@@ -291,8 +389,10 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "SET_PENDING_ACTION", action: "create" });
     dispatch({ type: "SET_ACTION_ERROR", message: null });
     try {
-      const { projectName, files, theory } = stateRef.current;
-      const record = await createPlaygroundUrl({ projectName, ...files, theory });
+      const { projectName, nodes, theory } = stateRef.current;
+      const record = await createPlaygroundUrl(
+        serializeProject(projectName, nodes, theory),
+      );
       applyRecordMeta(record);
     } catch (err) {
       dispatch({ type: "SET_ACTION_ERROR", message: errorMessage(err) });
@@ -303,7 +403,7 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
 
   async function save() {
     if (isReadOnly) return false;
-    const { playgroundId, shortURL, projectName, files, theory } = stateRef.current;
+    const { playgroundId, shortURL, projectName, nodes, theory } = stateRef.current;
     if (!playgroundId || !shortURL) return false;
 
     dispatch({ type: "SET_PENDING_ACTION", action: "save" });
@@ -311,7 +411,7 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
     try {
       const record = await updatePlaygroundUrl(
         playgroundId,
-        { projectName, ...files, theory },
+        serializeProject(projectName, nodes, theory),
         shortURL,
       );
       applyRecordMeta(record);
@@ -374,10 +474,23 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
 
   const actions: PlaygroundActions = {
     setProjectName: (name) => dispatch({ type: "SET_PROJECT_NAME", name }),
-    setFileContent: (file, content) => dispatch({ type: "SET_FILE", file, content }),
+    createFile: (parentId, name) =>
+      dispatch({
+        type: "ADD_NODE",
+        node: { id: createNodeId(), parentId, name, type: "file", content: "" },
+      }),
+    createFolder: (parentId, name) =>
+      dispatch({
+        type: "ADD_NODE",
+        node: { id: createNodeId(), parentId, name, type: "folder" },
+      }),
+    renameNode: (id, name) => dispatch({ type: "RENAME_NODE", id, name }),
+    deleteNode: (id) => dispatch({ type: "DELETE_NODE", id }),
+    setFileContent: (id, content) => dispatch({ type: "SET_FILE_CONTENT", id, content }),
     setTheory: (content) => dispatch({ type: "SET_THEORY", content }),
-    setActiveFile: (file) => dispatch({ type: "SET_ACTIVE_FILE", file }),
-    setMainView: (view) => dispatch({ type: "SET_MAIN_VIEW", view }),
+    openFile: (id) => dispatch({ type: "OPEN_FILE", id }),
+    closeFile: (id) => dispatch({ type: "CLOSE_FILE", id }),
+    setSidebarView: (view) => dispatch({ type: "SET_SIDEBAR_VIEW", view }),
     addLog: (entry) => dispatch({ type: "ADD_LOG", entry }),
     clearLogs: () => dispatch({ type: "CLEAR_LOGS" }),
     refresh,
@@ -387,7 +500,9 @@ export function PlaygroundProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <PlaygroundContext value={{ state, actions, isReadOnly }}>{children}</PlaygroundContext>
+    <PlaygroundContext value={{ state, actions, isReadOnly }}>
+      {children}
+    </PlaygroundContext>
   );
 }
 

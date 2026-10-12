@@ -35,7 +35,9 @@ export function ProjectNameField() {
         ref={inputRef}
         value={draft}
         onChange={(e) =>
-          setDraft(sanitizeProjectNameInput(e.target.value).slice(0, MAX_PROJECT_NAME_LENGTH))
+          setDraft(
+            sanitizeProjectNameInput(e.target.value).slice(0, MAX_PROJECT_NAME_LENGTH),
+          )
         }
         onBlur={commit}
         onKeyDown={(e) => {
@@ -52,7 +54,7 @@ export function ProjectNameField() {
         spellCheck={false}
         placeholder="project-name"
         maxLength={MAX_PROJECT_NAME_LENGTH}
-        className="h-6 w-32 font-mono text-xs sm:w-44"
+        className="h-6 w-full text-center font-mono text-xs"
       />
     );
   }
@@ -66,12 +68,12 @@ export function ProjectNameField() {
       }}
       title="Click to rename this project"
       className={cn(
-        "group flex h-6 max-w-[70vw] items-center gap-1.5 truncate rounded-md border border-transparent px-2 font-mono text-xs text-muted-foreground",
-        "hover:border-border hover:bg-secondary/60 hover:text-foreground transition-colors",
+        "group flex h-6 w-full min-w-0 items-center justify-center gap-1.5 rounded-md border border-border bg-background/60 px-2 font-mono text-xs text-muted-foreground",
+        "transition-colors hover:bg-accent hover:text-foreground",
       )}
     >
       <span className="truncate">{projectName}</span>
-      <Pencil className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-70" />
+      <Pencil className="size-3 shrink-0 opacity-50 transition-opacity group-hover:opacity-100" />
     </button>
   );
 }

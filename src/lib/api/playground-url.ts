@@ -1,18 +1,27 @@
+import type { PersistedEntry } from "@/lib/file-tree";
+
 const API_BASE = process.env.NEXT_PUBLIC_URL_SERVICE_URL ?? "https://url.devslix.com/api";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://playground.devslix.com";
 
+/** What the playground writes: the full file tree as path based entries. */
 export interface PlaygroundStateData {
   projectName: string;
-  html: string;
-  css: string;
-  js: string;
   theory: string;
+  files: PersistedEntry[];
+}
+
+/** What a record may contain when read back. Version 1 records only have the
+ * `html` / `css` / `js` trio; version 2 records have `files`. */
+export interface StoredPlaygroundData extends Partial<PlaygroundStateData> {
+  html?: string;
+  css?: string;
+  js?: string;
 }
 
 export interface PlaygroundUrlState {
   type: "playground";
-  version: 1;
-  data: PlaygroundStateData;
+  version: 1 | 2;
+  data: StoredPlaygroundData;
 }
 
 export interface UrlRecord {
@@ -26,18 +35,18 @@ export interface UrlRecord {
 export class PlaygroundApiError extends Error {}
 
 function buildUrlState(data: PlaygroundStateData): PlaygroundUrlState {
-  return { type: "playground", version: 1, data };
+  return { type: "playground", version: 2, data };
 }
 
 /** The value Save writes into longURL, and what Share's visibility is
  * checked against. Kept as one helper so the write side and the read
  * side can't drift apart. */
 function shareableLongURL(shortURL: string): string {
-    const url = new URL(SITE_URL);
-    url.searchParams.set("shortURL", shortURL);
-    url.searchParams.set("a", "r");
-    return url.toString();
-  }
+  const url = new URL(SITE_URL);
+  url.searchParams.set("shortURL", shortURL);
+  url.searchParams.set("a", "r");
+  return url.toString();
+}
 
 /** True once longURL has actually been patched to embed this record's
  * own shortURL — false right after creation (longURL is still the bare
@@ -102,7 +111,10 @@ export async function updatePlaygroundUrl(
 ): Promise<UrlRecord> {
   return request(`/urls/${id}`, {
     method: "PATCH",
-    body: JSON.stringify({ longURL: shareableLongURL(shortURL), urlState: buildUrlState(data) }),
+    body: JSON.stringify({
+      longURL: shareableLongURL(shortURL),
+      urlState: buildUrlState(data),
+    }),
   });
 }
 
@@ -114,7 +126,9 @@ export async function getPlaygroundUrlById(id: string): Promise<UrlRecord> {
  * shortURL, not the internal id — looks the record up by its unique
  * shortURL field. Payload's list endpoint has a different response
  * shape ({ docs: [...] }), so this doesn't go through request(). */
-export async function findPlaygroundUrlByShortURL(shortURL: string): Promise<UrlRecord | null> {
+export async function findPlaygroundUrlByShortURL(
+  shortURL: string,
+): Promise<UrlRecord | null> {
   const query = `where[shortURL][equals]=${encodeURIComponent(shortURL)}&limit=1`;
   const res = await fetch(`${API_BASE}/urls?${query}`);
   const body = await parseJson(res);

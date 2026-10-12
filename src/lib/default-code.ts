@@ -1,3 +1,5 @@
+import type { FsNode } from "@/lib/file-tree";
+
 export const DEFAULT_HTML = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -8,7 +10,7 @@ export const DEFAULT_HTML = `<!DOCTYPE html>
   </head>
   <body>
     <h1>Hello, Playground</h1>
-    <p>Edit the HTML, CSS and JS tabs on the left. The preview updates live.</p>
+    <p>Edit the files in the Explorer on the left. The preview updates live.</p>
     <button id="btn">Click me</button>
 
     <script src="script.js"></script>
@@ -53,8 +55,29 @@ if (btn) {
 }
 `;
 
-export const DEFAULT_FILES = {
-  html: DEFAULT_HTML,
-  css: DEFAULT_CSS,
-  js: DEFAULT_JS,
-};
+export const DEFAULT_INDEX_FILE_ID = "default-index-html";
+
+/** Starter project. Ids are fixed so resetting is a pure, repeatable operation. */
+export const DEFAULT_NODES: FsNode[] = [
+  {
+    id: DEFAULT_INDEX_FILE_ID,
+    parentId: null,
+    name: "index.html",
+    type: "file",
+    content: DEFAULT_HTML,
+  },
+  {
+    id: "default-style-css",
+    parentId: null,
+    name: "style.css",
+    type: "file",
+    content: DEFAULT_CSS,
+  },
+  {
+    id: "default-script-js",
+    parentId: null,
+    name: "script.js",
+    type: "file",
+    content: DEFAULT_JS,
+  },
+];

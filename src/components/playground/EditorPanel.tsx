@@ -1,20 +1,20 @@
 "use client";
 
-import { Settings2, Sparkles } from "lucide-react";
+import { Settings2, Sparkles, X } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
-import { type FileKey, usePlayground } from "@/context/playground-context";
-import type { EditorLanguage } from "@/lib/format-code";
+import { usePlayground } from "@/context/playground-context";
+import { findNode } from "@/lib/file-tree";
 import { cn } from "@/lib/utils";
 import type { CodeEditorHandle } from "./CodeEditor";
+import { FileIcon } from "./FileIcon";
 
-// CodeMirror (language packages, the VS Code theme, Prettier's parsers)
-// is one of the heaviest dependencies in this app. Loading it lazily,
-// client-side only, keeps it out of the initial JS the browser has to
-// parse before anything on screen is interactive.
+// Monaco (language services, Prettier's parsers) is one of the heaviest
+// dependencies in this app. Loading it lazily, client-side only, keeps it out
+// of the initial JS the browser has to parse before anything is interactive.
 const CodeEditor = dynamic(() => import("./CodeEditor").then((mod) => mod.CodeEditor), {
   ssr: false,
   loading: () => (
@@ -24,58 +24,87 @@ const CodeEditor = dynamic(() => import("./CodeEditor").then((mod) => mod.CodeEd
   ),
 });
 
-const FILE_TABS: {
-  key: FileKey;
-  label: string;
-  language: EditorLanguage;
-  dotClass: string;
-}[] = [
-  { key: "html", label: "index.html", language: "html", dotClass: "bg-html-accent" },
-  { key: "css", label: "style.css", language: "css", dotClass: "bg-css-accent" },
-  { key: "js", label: "script.js", language: "javascript", dotClass: "bg-js-accent" },
-];
-
 export function EditorPanel() {
   const { state, actions } = usePlayground();
-  const { activeFile, files } = state;
+  const { nodes, openFileIds, activeFileId } = state;
   const [lineWrap, setLineWrap] = useState(true);
+  const editorRef = useRef<CodeEditorHandle | null>(null);
+  const activeTabRef = useRef<HTMLDivElement | null>(null);
 
-  const editorRefs = useRef<Partial<Record<FileKey, CodeEditorHandle | null>>>({});
+  const activeNode = findNode(nodes, activeFileId);
+  const activeFile = activeNode?.type === "file" ? activeNode : null;
+
+  // Keep the active tab visible when many tabs overflow the tab bar.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeFileId is the trigger; the ref is read inside.
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeFileId]);
 
   return (
     <section className="flex h-full min-w-0 flex-col bg-editor">
-      <div className="flex h-9 shrink-0 items-center justify-between border-b border-border bg-panel pr-2">
-        <div className="flex h-full">
-          {FILE_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => {
-                actions.setActiveFile(tab.key);
-                requestAnimationFrame(() => editorRefs.current[tab.key]?.refresh());
-              }}
-              className={cn(
-                "relative flex items-center gap-2 px-4 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
-                tab.key === activeFile && "text-foreground",
-              )}
-            >
-              <span className={cn("size-1.5 rounded-full", tab.dotClass)} />
-              {tab.label}
-              {tab.key === activeFile && (
-                <span
+      <div className="flex h-9 shrink-0 items-stretch border-b border-border bg-panel">
+        <div
+          role="tablist"
+          aria-label="Open files"
+          className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {openFileIds.map((id) => {
+            const node = findNode(nodes, id);
+            if (node?.type !== "file") return null;
+            const isActive = id === activeFileId;
+            return (
+              <div
+                key={id}
+                ref={isActive ? activeTabRef : undefined}
+                role="presentation"
+                // Middle click closes a tab, as in VS Code.
+                onAuxClick={(event) => {
+                  if (event.button === 1) {
+                    event.preventDefault();
+                    actions.closeFile(id);
+                  }
+                }}
+                className={cn(
+                  "group relative flex shrink-0 items-center border-r border-border text-xs",
+                  isActive
+                    ? "bg-editor text-foreground"
+                    : "bg-panel text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {isActive && (
+                  <span className="absolute inset-x-0 top-0 h-px bg-primary" />
+                )}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => actions.openFile(id)}
+                  className="flex h-full items-center gap-1.5 pr-1 pl-3 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  <FileIcon name={node.name} />
+                  <span className="max-w-40 truncate">{node.name}</span>
+                </button>
+                <button
+                  type="button"
+                  title="Close"
+                  aria-label={`Close ${node.name}`}
+                  onClick={() => actions.closeFile(id)}
                   className={cn(
-                    "absolute inset-x-3 -bottom-px h-0.5 rounded-full",
-                    tab.dotClass,
+                    "mr-1.5 ml-0.5 flex size-5 items-center justify-center rounded-sm hover:bg-accent",
+                    !isActive &&
+                      "opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
                   )}
-                />
-              )}
-            </button>
-          ))}
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         <Popover>
           <PopoverTrigger
-            className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="mx-1 my-auto flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
             title="Editor settings"
           >
             <Settings2 className="size-3.5" />
@@ -83,8 +112,9 @@ export function EditorPanel() {
           <PopoverContent className="w-56">
             <button
               type="button"
-              onClick={() => editorRefs.current[activeFile]?.format()}
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-foreground hover:bg-accent"
+              disabled={activeFile === null}
+              onClick={() => void editorRef.current?.format()}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-foreground hover:bg-accent disabled:opacity-50"
             >
               <Sparkles className="size-3.5 text-muted-foreground" />
               Format document
@@ -107,26 +137,25 @@ export function EditorPanel() {
       </div>
 
       <div className="relative min-h-0 flex-1">
-        {FILE_TABS.map((tab) => (
-          <div
-            key={tab.key}
-            className={cn(
-              "absolute inset-0",
-              tab.key === activeFile ? "block" : "hidden",
-            )}
-          >
-            <CodeEditor
-              ref={(handle) => {
-                editorRefs.current[tab.key] = handle;
-              }}
-              language={tab.language}
-              value={files[tab.key]}
-              onChange={(value) => actions.setFileContent(tab.key, value)}
-              lineWrap={lineWrap}
-              className="h-full"
-            />
+        {activeFile ? (
+          <CodeEditor
+            ref={editorRef}
+            fileId={activeFile.id}
+            fileName={activeFile.name}
+            value={activeFile.content}
+            onChange={(value) => actions.setFileContent(activeFile.id, value)}
+            openFileIds={openFileIds}
+            lineWrap={lineWrap}
+            className="h-full"
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+            <p className="text-sm text-foreground">No file is open</p>
+            <p className="text-xs text-muted-foreground">
+              Pick a file from the Files panel, or create a new one.
+            </p>
           </div>
-        ))}
+        )}
       </div>
     </section>
   );

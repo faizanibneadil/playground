@@ -2,9 +2,10 @@
 
 import Editor, { type Monaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { useTheme } from "@/context/theme-context";
-import { type EditorLanguage, formatCode } from "@/lib/format-code";
+import { getFormatLanguage, getMonacoLanguage } from "@/lib/file-tree";
+import { formatCode } from "@/lib/format-code";
 import { registerAutoCloseTag } from "@/lib/monaco/auto-close-tag";
 import { registerTagRenameSync } from "@/lib/monaco/tag-rename-sync";
 import { applyMonacoTheme } from "@/lib/monaco/theme";
@@ -12,34 +13,50 @@ import { cn } from "@/lib/utils";
 
 export interface CodeEditorHandle {
   format: () => Promise<void>;
-  refresh: () => void;
   focus: () => void;
 }
 
 interface CodeEditorProps {
-  language: EditorLanguage;
+  /** Stable id of the open file. Each id gets its own Monaco model, so undo
+   * history, cursor and scroll position survive switching between tabs. */
+  fileId: string;
+  fileName: string;
   value: string;
   onChange: (value: string) => void;
+  /** Ids of the files that still have a tab; models of every other file are disposed. */
+  openFileIds: readonly string[];
   lineWrap?: boolean;
   className?: string;
 }
 
+const MODEL_PATH_PREFIX = "file:///";
+
 export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
-  function CodeEditor({ language, value, onChange, lineWrap = true, className }, ref) {
+  function CodeEditor(
+    { fileId, fileName, value, onChange, openFileIds, lineWrap = true, className },
+    ref,
+  ) {
     const { theme } = useTheme();
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
     const monacoRef = useRef<Monaco | null>(null);
+
+    const language = getMonacoLanguage(fileName);
+    const formatLanguage = getFormatLanguage(fileName);
+
+    // The Shift+Alt+F action is registered once on mount, so it reads the
+    // currently open file through refs instead of closing over stale props.
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
+    const formatLanguageRef = useRef(formatLanguage);
+    formatLanguageRef.current = formatLanguage;
 
-    // useImperativeHandle needs a genuinely stable callback identity to
-    // know when to rebuild the exposed handle.
-    const format = useCallback(async () => {
+    async function format() {
       const ed = editorRef.current;
       const model = ed?.getModel();
-      if (!ed || !model) return;
+      const target = formatLanguageRef.current;
+      if (!ed || !model || target === null) return;
       try {
-        const formatted = await formatCode(model.getValue(), language);
+        const formatted = await formatCode(model.getValue(), target);
         model.pushEditOperations(
           [],
           [{ range: model.getFullModelRange(), text: formatted }],
@@ -49,19 +66,14 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
       } catch {
         // Invalid syntax can't be formatted — leave the editor content as-is.
       }
-    }, [language]);
+    }
+    const formatRef = useRef(format);
+    formatRef.current = format;
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        format,
-        refresh: () => {
-          requestAnimationFrame(() => editorRef.current?.layout());
-        },
-        focus: () => editorRef.current?.focus(),
-      }),
-      [format],
-    );
+    useImperativeHandle(ref, () => ({
+      format: () => formatRef.current(),
+      focus: () => editorRef.current?.focus(),
+    }));
 
     useEffect(() => {
       if (!monacoRef.current) return;
@@ -72,11 +84,28 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
       editorRef.current?.updateOptions({ wordWrap: lineWrap ? "on" : "off" });
     }, [lineWrap]);
 
+    // "formatOnType" is what makes the auto-close-tag provider fire, but it
+    // would start reformatting CSS/JS on ";" and "}", so it's HTML-only.
+    useEffect(() => {
+      editorRef.current?.updateOptions({ formatOnType: language === "html" });
+    }, [language]);
+
+    // Closing a tab (or deleting a file) drops its model, like VS Code does.
+    useEffect(() => {
+      const monaco = monacoRef.current;
+      if (!monaco) return;
+      const live = new Set(openFileIds.map((id) => `/${id}`));
+      for (const model of monaco.editor.getModels()) {
+        if (model.uri.scheme === "file" && !live.has(model.uri.path)) model.dispose();
+      }
+    }, [openFileIds]);
+
     return (
       <Editor
         className={cn("h-full w-full", className)}
         height="100%"
         width="100%"
+        path={`${MODEL_PATH_PREFIX}${fileId}`}
         language={language}
         value={value}
         theme="app"
@@ -92,8 +121,8 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
           lineHeight: 21,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
-          // Follows its container via ResizeObserver: panel drags, tab
-          // show/hide, mobile pane switches and orientation changes all work.
+          // Follows its container via ResizeObserver: panel drags, sidebar
+          // collapse, mobile pane switches and orientation changes all work.
           automaticLayout: true,
           // Suggest/hover widgets render on <body>, so panel overflow can't clip them.
           fixedOverflowWidgets: true,
@@ -110,13 +139,10 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
           suggestOnTriggerCharacters: true,
           folding: true,
           showFoldingControls: "mouseover",
-          // Turns on Monaco's native "Auto Rename Tag" UI — the syncing
-          // logic comes from the LinkedEditingRangeProvider registered in
-          // onMount (html only; harmless no-op for css/js).
+          // Turns on Monaco's native "Auto Rename Tag" UI — the syncing logic
+          // comes from the LinkedEditingRangeProvider registered in onMount
+          // (html only; harmless no-op for css/js).
           linkedEditing: true,
-          // Required for the auto-close-tag on-type provider to fire at
-          // all. Only html needs it; css/js would start auto-reformatting
-          // on ";" / "}".
           formatOnType: language === "html",
         }}
         beforeMount={(monaco) => {
@@ -132,22 +158,22 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
           editorRef.current = editorInstance;
           monacoRef.current = monaco;
 
-          // Re-registering this exact action id shadows Monaco's own
-          // built-in formatter with our Prettier-backed one, on the same
-          // Shift+Alt+F shortcut it already owns.
+          // Re-registering this exact action id shadows Monaco's own built-in
+          // formatter with our Prettier-backed one, on the same Shift+Alt+F
+          // shortcut it already owns.
           editorInstance.addAction({
             id: "editor.action.formatDocument",
             label: "Format Document",
             keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF],
             run: () => {
-              void format();
+              void formatRef.current();
             },
           });
 
-          if (language === "html") {
-            registerAutoCloseTag(monaco, editorInstance, "html");
-            registerTagRenameSync(monaco, "html");
-          }
+          // Language-level providers: registered once, they apply to every
+          // HTML model of the single editor instance.
+          registerAutoCloseTag(monaco, editorInstance, "html");
+          registerTagRenameSync(monaco, "html");
         }}
       />
     );

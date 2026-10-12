@@ -76,7 +76,7 @@ export function TheoryPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-editor">
-      <div className="mx-auto flex w-full max-w-[37em] flex-1 flex-col px-6 py-10 sm:px-10">
+      <div className="mx-auto flex w-full max-w-[37em] flex-1 flex-col px-4 py-4">
         <EditorContent editor={editor} className="flex flex-1 flex-col" />
       </div>
     </div>
